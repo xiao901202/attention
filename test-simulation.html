@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行為分析引擎 - 自動模擬測試</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0a0f;
+      --bg-card: #13131a;
+      --bg-hover: #1a1a24;
+      --text-primary: #e4e4e7;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent-reading: #22c55e;
+      --accent-zombie: #ef4444;
+      --accent-navigating: #f59e0b;
+      --accent-idle: #6366f1;
+      --border: rgba(255,255,255,0.08);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      line-height: 1.8;
+    }
+
+    /* 固定控制面板 */
+    .control-panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 380px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      z-index: 1000;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    /* 狀態顯示 */
+    .state-display {
+      text-align: center;
+      padding: 20px;
+      background: var(--bg-dark);
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+
+    .state-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .state-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px;
+      font-weight: 700;
+      transition: color 0.3s ease;
+    }
+
+    .state-value.IDLE { color: var(--accent-idle); }
+    .state-value.READING_FLOW { color: var(--accent-reading); }
+    .state-value.SCANNING_ZOMBIE { color: var(--accent-zombie); }
+    .state-value.NAVIGATING { color: var(--accent-navigating); }
+
+    /* 指標網格 */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .metric-card {
+      background: var(--bg-dark);
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .metric-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    /* 模擬控制按鈕 */
+    .simulation-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .sim-btn {
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Noto Sans TC', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sim-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .sim-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .sim-btn.reading {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--accent-reading);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .sim-btn.zombie {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--accent-zombie);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .sim-btn.navigating {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-navigating);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .sim-btn.stop {
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--accent-idle);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .sim-btn.exit-reading {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(245, 158, 11, 0.15));
+      color: var(--text-primary);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .sim-btn.mouse-reading {
+      background: rgba(34, 197, 94, 0.1);
+      color: var(--accent-reading);
+      border: 1px dashed rgba(34, 197, 94, 0.5);
+    }
+
+    .sim-btn.mouse-zombie {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--accent-zombie);
+      border: 1px dashed rgba(239, 68, 68, 0.5);
+    }
+
+    /* 狀態歷史 */
+    .state-history {
+      background: var(--bg-dark);
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .history-state {
+      font-weight: 500;
+    }
+
+    .history-state.IDLE { color: var(--accent-idle); }
+    .history-state.READING_FLOW { color: var(--accent-reading); }
+    .history-state.SCANNING_ZOMBIE { color: var(--accent-zombie); }
+    .history-state.NAVIGATING { color: var(--accent-navigating); }
+
+    /* 模擬狀態指示 */
+    .sim-status {
+      background: var(--bg-dark);
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+
+    .sim-status-label {
+      color: var(--text-muted);
+    }
+
+    .sim-status-value {
+      color: var(--accent-navigating);
+      font-weight: 500;
+    }
+
+    /* 內容區域 */
+    .content-area {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 40px 20px 100px;
+      padding-right: 420px;
+    }
+
+    .article {
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+      border: 1px solid var(--border);
+    }
+
+    .article h2 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      color: var(--text-primary);
+    }
+
+    .article p {
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      text-align: justify;
+    }
+
+    .article-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* 滾動進度條 */
+    .scroll-progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-reading), var(--accent-navigating));
+      z-index: 1001;
+      transition: width 0.1s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="scroll-progress" id="scrollProgress"></div>
+
+  <!-- 控制面板 -->
+  <div class="control-panel">
+    <div class="panel-title">🧪 行為模擬測試</div>
+
+    <!-- 當前狀態 -->
+    <div class="state-display">
+      <div class="state-label">當前偵測狀態</div>
+      <div class="state-value IDLE" id="currentState">IDLE</div>
+    </div>
+
+    <!-- 模擬狀態 -->
+    <div class="sim-status">
+      <span class="sim-status-label">模擬中：</span>
+      <span class="sim-status-value" id="simStatus">停止</span>
+    </div>
+
+    <!-- 指標 -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">速度 (px/s)</div>
+        <div class="metric-value" id="speed">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Z-Score</div>
+        <div class="metric-value" id="zScore">0.00</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Stop Density</div>
+        <div class="metric-value" id="stopDensity">0%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Mean Speed</div>
+        <div class="metric-value" id="meanSpeed">0</div>
+      </div>
+    </div>
+
+    <!-- 模擬控制 -->
+    <div class="simulation-controls">
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">📱 觸控模擬（連續滾動）</div>
+      <button class="sim-btn reading" id="btnReading">
+        📖 模擬閱讀 (慢速 + 停頓)
+      </button>
+      <button class="sim-btn zombie" id="btnZombie">
+        🧟 模擬殭屍滾動 (持續快速)
+      </button>
+      <button class="sim-btn navigating" id="btnNavigating">
+        🚀 模擬導航 (中速找內容)
+      </button>
+      <button class="sim-btn exit-reading" id="btnExitReading">
+        📖→🚀 從閱讀退出到導航
+      </button>
+      
+      <div style="font-size: 11px; color: var(--text-muted); margin-top: 12px; margin-bottom: 4px;">🖱️ 滑鼠滾輪模擬（脈衝式）</div>
+      <button class="sim-btn mouse-reading" id="btnMouseReading">
+        🖱️📖 滑鼠慢滾 (閱讀節奏)
+      </button>
+      <button class="sim-btn mouse-zombie" id="btnMouseZombie">
+        🖱️🧟 滑鼠快滾 (快速瀏覽)
+      </button>
+      
+      <button class="sim-btn stop" id="btnStop" style="margin-top: 12px;">
+        ⏹️ 停止模擬 (觸發 IDLE)
+      </button>
+    </div>
+
+    <!-- 狀態歷史 -->
+    <div class="panel-title" style="margin-top: 16px;">狀態變化歷史</div>
+    <div class="state-history" id="stateHistory">
+      <div class="history-item">
+        <span class="history-state IDLE">IDLE</span>
+        <span style="color: var(--text-muted);">初始狀態</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 長內容區域 -->
+  <div class="content-area" id="contentArea">
+    <!-- 動態生成的文章 -->
+  </div>
+
+  <script>
+    // ============================================
+    // Configuration
+    // ============================================
+    const CONFIG = {
+      SAMPLING_RATE_MS: 100,
+      BASELINE_WINDOW_SIZE: 300,
+      STAIRCASE_WINDOW_SIZE: 20,
+      NOISE_THRESHOLD_PX: 15,
+      MAX_VALID_SPEED_PX: 2000,
+      MIN_HUMAN_VARIABILITY: 30,
+      ZOMBIE_Z_THRESHOLD: 1.2,
+      READING_Z_UPPER: 0.5,
+      READING_Z_LOWER: -1.0,
+      STAIRCASE_DENSITY_MIN: 0.5
+    };
+
+    // ============================================
+    // BehaviorAnalysisEngine
+    // ============================================
+    class BehaviorAnalysisEngine {
+      constructor() {
+        this.lastScrollTop = window.scrollY;
+        this.lastTime = Date.now();
+        this.timer = null;
+        this.activeSpeedHistory = [];
+        this.recentRawHistory = [];
+        this.currentState = 'IDLE';
+        this.pendingState = 'IDLE';
+        this.stabilityCounter = 0;
+        this.metrics = {
+          currentSpeed: 0,
+          meanSpeed: 0,
+          stdDev: 0,
+          effectiveSigma: 0,
+          zScore: 0,
+          stopDensity: 0
+        };
+      }
+
+      start() {
+        if (this.timer) return;
+        this.timer = setInterval(() => this.tick(), CONFIG.SAMPLING_RATE_MS);
+      }
+
+      stop() {
+        if (this.timer) {
+          clearInterval(this.timer);
+          this.timer = null;
+        }
+      }
+
+      reset() {
+        this.activeSpeedHistory = [];
+        this.recentRawHistory = [];
+        this.currentState = 'IDLE';
+        this.pendingState = 'IDLE';
+        this.stabilityCounter = 0;
+        this.metrics = { currentSpeed: 0, meanSpeed: 0, stdDev: 0, effectiveSigma: 0, zScore: 0, stopDensity: 0 };
+        this.lastScrollTop = window.scrollY;
+        this.lastTime = Date.now();
+      }
+
+      tick() {
+        const now = Date.now();
+        const currentScrollTop = window.scrollY;
+        const timeDiff = now - this.lastTime;
+        if (timeDiff === 0) return;
+
+        const distance = Math.abs(currentScrollTop - this.lastScrollTop);
+        const instantSpeed = (distance / timeDiff) * 1000;
+
+        this.updateBuffers(instantSpeed);
+        this.calculateStatistics(instantSpeed);
+        const stopDensity = this.calculateStopDensity();
+        this.metrics.stopDensity = stopDensity;
+
+        const rawState = this.determineRawState(instantSpeed, this.metrics.zScore, stopDensity);
+        this.applyHysteresis(rawState);
+
+        this.lastScrollTop = currentScrollTop;
+        this.lastTime = now;
+
+        window.dispatchEvent(new CustomEvent('metrics-update', { detail: this.metrics }));
+      }
+
+      updateBuffers(speed) {
+        this.recentRawHistory.push(speed);
+        if (this.recentRawHistory.length > CONFIG.STAIRCASE_WINDOW_SIZE) {
+          this.recentRawHistory.shift();
+        }
+
+        if (speed > CONFIG.NOISE_THRESHOLD_PX && speed < CONFIG.MAX_VALID_SPEED_PX) {
+          this.activeSpeedHistory.push(speed);
+          if (this.activeSpeedHistory.length > CONFIG.BASELINE_WINDOW_SIZE) {
+            this.activeSpeedHistory.shift();
+          }
+        }
+      }
+
+      calculateStatistics(currentSpeed) {
+        this.metrics.currentSpeed = currentSpeed;
+
+        if (this.activeSpeedHistory.length < 5) {
+          this.metrics.meanSpeed = 0;
+          this.metrics.stdDev = 0;
+          this.metrics.effectiveSigma = CONFIG.MIN_HUMAN_VARIABILITY;
+          this.metrics.zScore = 0;
+          return;
+        }
+
+        const sum = this.activeSpeedHistory.reduce((a, b) => a + b, 0);
+        const mean = sum / this.activeSpeedHistory.length;
+        const squaredDiffs = this.activeSpeedHistory.map(s => Math.pow(s - mean, 2));
+        const variance = squaredDiffs.reduce((a, b) => a + b, 0) / this.activeSpeedHistory.length;
+        const stdDev = Math.sqrt(variance);
+
+        this.metrics.meanSpeed = mean;
+        this.metrics.stdDev = stdDev;
+        this.metrics.effectiveSigma = Math.max(stdDev, CONFIG.MIN_HUMAN_VARIABILITY);
+        this.metrics.zScore = (currentSpeed - mean) / this.metrics.effectiveSigma;
+      }
+
+      calculateStopDensity() {
+        if (this.recentRawHistory.length === 0) return 0;
+        const stopCount = this.recentRawHistory.filter(s => s < CONFIG.NOISE_THRESHOLD_PX).length;
+        return stopCount / this.recentRawHistory.length;
+      }
+
+      determineRawState(speed, zScore, stopDensity) {
+        // Early exit from READING_FLOW
+        if (this.currentState === 'READING_FLOW') {
+          if (stopDensity < 0.35 && zScore > 0.3) {
+            return 'NAVIGATING';
+          }
+        }
+
+        // 1. HIGH STOP DENSITY PATH - Check BEFORE IDLE!
+        // Mouse wheel produces high stop density even when current tick is stopped
+        if (stopDensity >= 0.6) {
+          return 'READING_FLOW';
+        }
+
+        // 2. IDLE Check
+        if (speed < CONFIG.NOISE_THRESHOLD_PX) return 'IDLE';
+
+        // 3. ZOMBIE Check (only when stop density is reasonably low)
+        if (zScore > CONFIG.ZOMBIE_Z_THRESHOLD && stopDensity < 0.4) {
+          return 'SCANNING_ZOMBIE';
+        }
+        if (stopDensity < 0.1) return 'SCANNING_ZOMBIE';
+
+        // 4. READING Check (medium stop density range: 0.3 ~ 0.6)
+        if (zScore > CONFIG.READING_Z_LOWER && zScore < CONFIG.READING_Z_UPPER) {
+          if (stopDensity >= CONFIG.STAIRCASE_DENSITY_MIN) {
+            return 'READING_FLOW';
+          }
+        }
+        return 'NAVIGATING';
+      }
+
+      applyHysteresis(newState) {
+        let effectiveState = newState;
+        if (newState === 'IDLE' && this.currentState === 'READING_FLOW') {
+          effectiveState = 'READING_FLOW';
+        }
+
+        if (effectiveState !== this.currentState) {
+          if (this.pendingState === effectiveState) {
+            this.stabilityCounter++;
+            const requiredStability = (this.currentState === 'READING_FLOW') ? 2 : 3;
+            if (this.stabilityCounter >= requiredStability) {
+              const oldState = this.currentState;
+              this.currentState = effectiveState;
+              this.stabilityCounter = 0;
+              this.onStateChange(oldState, this.currentState);
+            }
+          } else {
+            this.pendingState = effectiveState;
+            this.stabilityCounter = 0;
+          }
+        } else {
+          this.stabilityCounter = 0;
+          this.pendingState = effectiveState;
+        }
+      }
+
+      onStateChange(oldState, newState) {
+        window.dispatchEvent(new CustomEvent('state-change', { 
+          detail: { oldState, newState, timestamp: Date.now() }
+        }));
+      }
+    }
+
+    // ============================================
+    // Scroll Simulator
+    // ============================================
+    class ScrollSimulator {
+      constructor() {
+        this.isRunning = false;
+        this.currentMode = null;
+        this.animationFrame = null;
+        this.lastTime = 0;
+        this.pauseUntil = 0;
+      }
+
+      // 模擬閱讀：慢速滾動 + 頻繁停頓
+      startReading() {
+        this.stop();
+        this.currentMode = 'reading';
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        this.pauseUntil = 0;
+        this.readingStep = 0;
+        this.animate();
+      }
+
+      // 模擬殭屍滾動：持續快速滾動不停
+      startZombie() {
+        this.stop();
+        this.currentMode = 'zombie';
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        this.animate();
+      }
+
+      // 模擬導航：中等速度滾動，偶爾停頓
+      startNavigating() {
+        this.stop();
+        this.currentMode = 'navigating';
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        this.pauseUntil = 0;
+        this.animate();
+      }
+
+      // 從 READING_FLOW 退出到 NAVIGATING
+      // 策略：先進入閱讀模式，建立基線，然後加速滾動且減少停頓
+      startExitReading() {
+        this.stop();
+        this.currentMode = 'exit-reading';
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        this.pauseUntil = 0;
+        this.phase = 'reading'; // 先閱讀
+        this.phaseStartTime = performance.now();
+        this.readingStep = 0;
+        this.animate();
+      }
+
+      // 🖱️ 滑鼠滾輪模擬：閱讀模式
+      // 特點：每次滾動是離散的脈衝，滾一下停一下
+      startMouseReading() {
+        this.stop();
+        this.currentMode = 'mouse-reading';
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        this.nextWheelTime = performance.now();
+        this.wheelState = 'waiting'; // waiting, scrolling, pausing
+        this.animate();
+      }
+
+      // 🖱️ 滑鼠滾輪模擬：殭屍模式（快速連續滾輪）
+      startMouseZombie() {
+        this.stop();
+        this.currentMode = 'mouse-zombie';
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        this.nextWheelTime = performance.now();
+        this.animate();
+      }
+
+      stop() {
+        this.isRunning = false;
+        this.currentMode = null;
+        if (this.animationFrame) {
+          cancelAnimationFrame(this.animationFrame);
+          this.animationFrame = null;
+        }
+      }
+
+      animate() {
+        if (!this.isRunning) return;
+
+        const now = performance.now();
+        const deltaTime = now - this.lastTime;
+
+        // 處理暫停
+        if (now < this.pauseUntil) {
+          this.lastTime = now;
+          this.animationFrame = requestAnimationFrame(() => this.animate());
+          return;
+        }
+
+        let scrollAmount = 0;
+
+        switch (this.currentMode) {
+          case 'reading':
+            scrollAmount = this.simulateReading(deltaTime, now);
+            break;
+          case 'zombie':
+            scrollAmount = this.simulateZombie(deltaTime);
+            break;
+          case 'navigating':
+            scrollAmount = this.simulateNavigating(deltaTime, now);
+            break;
+          case 'exit-reading':
+            scrollAmount = this.simulateExitReading(deltaTime, now);
+            break;
+          case 'mouse-reading':
+            scrollAmount = this.simulateMouseReading(now);
+            break;
+          case 'mouse-zombie':
+            scrollAmount = this.simulateMouseZombie(now);
+            break;
+        }
+
+        if (scrollAmount !== 0) {
+          window.scrollBy(0, scrollAmount);
+        }
+
+        // 邊界檢查
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        if (window.scrollY >= maxScroll - 10) {
+          window.scrollTo(0, 0); // 回到頂部
+        }
+
+        this.lastTime = now;
+        this.animationFrame = requestAnimationFrame(() => this.animate());
+      }
+
+      simulateReading(deltaTime, now) {
+        // 閱讀模式：滾動一小段，然後暫停「閱讀」
+        // 速度約 30-60 px/s，每滾動 50-100px 停頓 800-1500ms
+        this.readingStep = (this.readingStep || 0);
+        
+        const scrollSpeed = 40 + Math.random() * 20; // 40-60 px/s
+        const scrollAmount = (scrollSpeed * deltaTime) / 1000;
+        
+        this.readingStep += scrollAmount;
+        
+        // 每滾動約 60-100px 停頓
+        if (this.readingStep > 60 + Math.random() * 40) {
+          this.readingStep = 0;
+          this.pauseUntil = now + 800 + Math.random() * 700; // 停頓 800-1500ms
+        }
+        
+        return scrollAmount;
+      }
+
+      simulateZombie(deltaTime) {
+        // 殭屍模式：持續快速滾動，不停頓
+        // 速度約 150-300 px/s
+        const scrollSpeed = 200 + Math.random() * 100;
+        return (scrollSpeed * deltaTime) / 1000;
+      }
+
+      simulateNavigating(deltaTime, now) {
+        // 導航模式：中等速度，偶爾短暫停頓
+        // 速度約 80-150 px/s，偶爾停頓 200-400ms
+        const scrollSpeed = 100 + Math.random() * 50;
+        const scrollAmount = (scrollSpeed * deltaTime) / 1000;
+        
+        // 5% 機率短暫停頓
+        if (Math.random() < 0.005) {
+          this.pauseUntil = now + 200 + Math.random() * 200;
+        }
+        
+        return scrollAmount;
+      }
+
+      simulateExitReading(deltaTime, now) {
+        const elapsed = now - this.phaseStartTime;
+        
+        if (this.phase === 'reading') {
+          // 前 5 秒：正常閱讀建立 READING_FLOW
+          if (elapsed < 5000) {
+            return this.simulateReading(deltaTime, now);
+          } else {
+            // 切換到快速階段
+            this.phase = 'transition';
+            this.phaseStartTime = now;
+            updateSimStatus('📖→🚀 加速中（退出閱讀）');
+          }
+        }
+        
+        if (this.phase === 'transition') {
+          // 過渡階段：加速且減少停頓，觸發退出條件
+          // 需要：stopDensity < 0.35 && zScore > 0.3
+          const scrollSpeed = 120 + Math.random() * 40; // 比閱讀快
+          return (scrollSpeed * deltaTime) / 1000;
+        }
+        
+        return 0;
+      }
+
+      // ============================================
+      // 🖱️ 滑鼠滾輪模擬方法
+      // ============================================
+      
+      /**
+       * 滑鼠滾輪閱讀模式
+       * 特點：
+       * - 每次滾輪滾動是「瞬間脈衝」（40-80px）
+       * - 滾動之間有較長間隔（閱讀時間：800-2000ms）
+       * - 偶爾連續滾動 2-3 次跳過不感興趣的內容
+       */
+      simulateMouseReading(now) {
+        if (now < this.nextWheelTime) {
+          return 0; // 等待下次滾輪事件
+        }
+
+        // 模擬滾輪一格的距離（通常 40-100px）
+        const wheelDelta = 50 + Math.random() * 30; // 50-80px
+
+        // 決定下次滾輪的時間
+        // 閱讀時：長間隔（看完一段再滾）
+        // 偶爾快速連滾（跳過不感興趣的部分）
+        const quickScrollChance = Math.random();
+        
+        if (quickScrollChance < 0.15) {
+          // 15% 機率：快速連滾 2-3 次（跳過內容）
+          this.nextWheelTime = now + 80 + Math.random() * 100; // 80-180ms
+        } else if (quickScrollChance < 0.3) {
+          // 15% 機率：中等間隔（快速瀏覽）
+          this.nextWheelTime = now + 400 + Math.random() * 400; // 400-800ms
+        } else {
+          // 70% 機率：長間隔（閱讀）
+          this.nextWheelTime = now + 1000 + Math.random() * 1500; // 1000-2500ms
+        }
+
+        return wheelDelta;
+      }
+
+      /**
+       * 滑鼠滾輪殭屍模式（快速連續滾輪）
+       * 特點：
+       * - 持續快速滾動滾輪
+       * - 每次滾輪間隔很短（50-150ms）
+       * - 模擬用戶瘋狂滾輪快速瀏覽
+       */
+      simulateMouseZombie(now) {
+        if (now < this.nextWheelTime) {
+          return 0;
+        }
+
+        // 快速滾輪時，每次滾動距離較大
+        const wheelDelta = 60 + Math.random() * 60; // 60-120px
+        
+        // 很短的間隔，模擬快速滾輪
+        this.nextWheelTime = now + 50 + Math.random() * 100; // 50-150ms
+
+        return wheelDelta;
+      }
+    }
+
+    // ============================================
+    // UI & Initialization
+    // ============================================
+    const engine = new BehaviorAnalysisEngine();
+    const simulator = new ScrollSimulator();
+
+    // DOM Elements
+    const currentStateEl = document.getElementById('currentState');
+    const speedEl = document.getElementById('speed');
+    const zScoreEl = document.getElementById('zScore');
+    const stopDensityEl = document.getElementById('stopDensity');
+    const meanSpeedEl = document.getElementById('meanSpeed');
+    const simStatusEl = document.getElementById('simStatus');
+    const stateHistoryEl = document.getElementById('stateHistory');
+    const scrollProgressEl = document.getElementById('scrollProgress');
+
+    // Generate long content
+    function generateContent() {
+      const contentArea = document.getElementById('contentArea');
+      const topics = [
+        { title: '深度學習的未來發展', content: '人工智慧正在快速改變我們的世界。從自然語言處理到電腦視覺，深度學習技術已經在各個領域展現出驚人的能力。隨著計算能力的提升和數據量的增加，我們可以期待看到更多突破性的應用。' },
+        { title: '可持續發展與綠色科技', content: '面對氣候變遷的挑戰，世界各國正在積極尋找可持續的解決方案。太陽能、風能等可再生能源的發展，電動汽車的普及，以及智慧城市的建設，都是朝向更綠色未來的重要步驟。' },
+        { title: '量子計算的潛力', content: '量子計算代表了計算科學的下一個前沿。利用量子力學的原理，量子電腦能夠解決傳統電腦無法處理的複雜問題。從藥物研發到密碼學，量子計算將帶來革命性的改變。' },
+        { title: '數位健康與遠程醫療', content: '疫情加速了數位健康的發展。遠程醫療、穿戴式設備和健康應用程式讓人們能夠更好地管理自己的健康。人工智慧輔助診斷系統也正在幫助醫生提供更精準的醫療服務。' },
+        { title: '區塊鏈與去中心化金融', content: '區塊鏈技術不僅僅是加密貨幣的基礎，它還有潛力改變金融、供應鏈管理和數位身份認證等多個領域。去中心化金融（DeFi）正在創造新的金融服務模式。' },
+        { title: '元宇宙與虛擬實境', content: '元宇宙概念的興起引發了人們對虛擬世界未來的想像。虛擬實境和擴增實境技術的進步，讓沉浸式體驗變得更加真實。未來，我們可能會在虛擬空間中工作、學習和社交。' },
+        { title: '自動駕駛技術的進展', content: '自動駕駛汽車正在從科幻變成現實。感測器技術、人工智慧和高精度地圖的結合，使得車輛能夠在複雜的道路環境中安全行駛。這項技術將徹底改變交通運輸行業。' },
+        { title: '太空探索的新紀元', content: '私人航太公司的崛起開啟了太空探索的新時代。從商業太空旅行到月球和火星任務，人類正在向宇宙更深處邁進。太空技術的發展也將為地球帶來新的科技應用。' },
+        { title: '生物科技與基因編輯', content: 'CRISPR 等基因編輯技術為醫學帶來了前所未有的可能性。從治療遺傳性疾病到開發新的治療方法，生物科技正在改寫醫學的未來。同時，這也引發了關於倫理的重要討論。' },
+        { title: '智慧城市與物聯網', content: '物聯網技術正在將城市變得更加智慧。從智慧交通管理到能源效率優化，感測器和數據分析讓城市運營更加高效。智慧城市的建設將提升居民的生活品質。' },
+        { title: '網路安全的重要性', content: '隨著數位化程度的加深，網路安全變得越來越重要。從個人隱私保護到企業數據安全，我們需要更強大的安全措施來應對日益複雜的網路威脅。' },
+        { title: '教育科技的革新', content: '線上學習平台和教育科技正在改變傳統的教育模式。個性化學習、互動式內容和人工智慧輔導系統讓學習變得更加有效和有趣。終身學習的理念正在成為現實。' },
+        { title: '3D 列印與製造業革命', content: '3D 列印技術正在改變製造業的面貌。從原型製作到最終產品生產，增材製造技術讓客製化生產變得更加經濟可行。這項技術也在醫療和航太領域展現出巨大潛力。' },
+        { title: '人機協作的未來', content: '機器人和人工智慧不是要取代人類，而是要與人類協作。協作機器人在工廠中與工人並肩工作，智慧助手幫助我們處理日常任務。人機協作將創造新的工作模式。' },
+        { title: '數據科學與決策', content: '大數據和數據科學正在改變企業的決策方式。通過分析海量數據，企業能夠發現隱藏的模式和趨勢，做出更明智的商業決策。數據驅動的文化正在各行各業普及。' }
+      ];
+
+      let html = '';
+      for (let i = 0; i < 30; i++) {
+        const topic = topics[i % topics.length];
+        const extraParagraphs = `
+          <p>這是一段額外的內容，用於增加頁面的長度。在實際的社交媒體平台上，每個貼文或文章都會有相當的長度，讓使用者需要滾動才能閱讀完整內容。透過這種方式，我們可以更真實地模擬實際的使用情境。</p>
+          <p>行為分析引擎會監測使用者的滾動速度、停頓頻率等指標，來判斷使用者是否真正在閱讀內容，還是只是在機械性地滾動頁面。這種分析對於理解使用者行為和提升內容品質都有重要意義。</p>
+          <p>當使用者以較慢的速度滾動，並且頻繁停下來閱讀時，系統會判定為「閱讀模式」（READING_FLOW）。相反地，如果使用者持續快速滾動而不停頓，則會被判定為「殭屍滾動」（SCANNING_ZOMBIE）。</p>
+        `;
+        html += `
+          <article class="article">
+            <h2>${i + 1}. ${topic.title}</h2>
+            <p>${topic.content}</p>
+            ${extraParagraphs}
+            <div class="article-meta">
+              文章 ${i + 1} / 30 • 預計閱讀時間 3 分鐘
+            </div>
+          </article>
+        `;
+      }
+      contentArea.innerHTML = html;
+    }
+
+    function updateSimStatus(status) {
+      simStatusEl.textContent = status;
+    }
+
+    function addHistoryEntry(oldState, newState) {
+      const time = new Date().toLocaleTimeString();
+      const html = `
+        <div class="history-item">
+          <span>
+            <span class="history-state ${oldState}">${oldState}</span>
+            → 
+            <span class="history-state ${newState}">${newState}</span>
+          </span>
+          <span style="color: var(--text-muted);">${time}</span>
+        </div>
+      `;
+      stateHistoryEl.insertAdjacentHTML('afterbegin', html);
+      
+      // 限制歷史記錄數量
+      while (stateHistoryEl.children.length > 20) {
+        stateHistoryEl.removeChild(stateHistoryEl.lastChild);
+      }
+    }
+
+    // Event Listeners
+    window.addEventListener('metrics-update', (e) => {
+      const m = e.detail;
+      speedEl.textContent = Math.round(m.currentSpeed);
+      zScoreEl.textContent = m.zScore.toFixed(2);
+      stopDensityEl.textContent = Math.round(m.stopDensity * 100) + '%';
+      meanSpeedEl.textContent = Math.round(m.meanSpeed);
+    });
+
+    window.addEventListener('state-change', (e) => {
+      const { oldState, newState } = e.detail;
+      currentStateEl.textContent = newState;
+      currentStateEl.className = 'state-value ' + newState;
+      addHistoryEntry(oldState, newState);
+    });
+
+    // Scroll progress
+    window.addEventListener('scroll', () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = (scrollTop / docHeight) * 100;
+      scrollProgressEl.style.width = progress + '%';
+    });
+
+    // Button handlers
+    document.getElementById('btnReading').addEventListener('click', () => {
+      simulator.startReading();
+      updateSimStatus('📖 閱讀模式');
+    });
+
+    document.getElementById('btnZombie').addEventListener('click', () => {
+      simulator.startZombie();
+      updateSimStatus('🧟 殭屍滾動');
+    });
+
+    document.getElementById('btnNavigating').addEventListener('click', () => {
+      simulator.startNavigating();
+      updateSimStatus('🚀 導航模式');
+    });
+
+    document.getElementById('btnExitReading').addEventListener('click', () => {
+      simulator.startExitReading();
+      updateSimStatus('📖 建立閱讀狀態中...');
+    });
+
+    document.getElementById('btnMouseReading').addEventListener('click', () => {
+      simulator.startMouseReading();
+      updateSimStatus('🖱️📖 滑鼠閱讀模式（脈衝式）');
+    });
+
+    document.getElementById('btnMouseZombie').addEventListener('click', () => {
+      simulator.startMouseZombie();
+      updateSimStatus('🖱️🧟 滑鼠快滾模式（脈衝式）');
+    });
+
+    document.getElementById('btnStop').addEventListener('click', () => {
+      simulator.stop();
+      updateSimStatus('⏹️ 已停止');
+    });
+
+    // Initialize
+    generateContent();
+    engine.start();
+
+    console.log('🧪 行為模擬測試頁面已載入');
+    console.log('點擊右側按鈕開始模擬不同的滾動行為');
+  </script>
+</body>
+</html>

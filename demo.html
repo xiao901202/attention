@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Behavior Analysis Engine - 滾動行為分析演示</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0e14;
+      --bg-secondary: #1a1f2e;
+      --bg-tertiary: #252b3b;
+      --accent-reading: #00d4aa;
+      --accent-zombie: #ff4757;
+      --accent-idle: #546e7a;
+      --accent-navigating: #ffd93d;
+      --text-primary: #e8eaed;
+      --text-secondary: #9aa0a6;
+      --text-muted: #5f6368;
+      --glow-reading: 0 0 30px rgba(0, 212, 170, 0.4);
+      --glow-zombie: 0 0 30px rgba(255, 71, 87, 0.4);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* Fixed HUD Panel */
+    .hud-panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 340px;
+      background: linear-gradient(145deg, var(--bg-secondary), var(--bg-tertiary));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 24px;
+      z-index: 1000;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      backdrop-filter: blur(10px);
+      transition: box-shadow 0.3s ease;
+    }
+
+    .hud-panel.state-READING_FLOW {
+      box-shadow: var(--glow-reading), 0 8px 32px rgba(0,0,0,0.5);
+      border-color: var(--accent-reading);
+    }
+
+    .hud-panel.state-SCANNING_ZOMBIE {
+      box-shadow: var(--glow-zombie), 0 8px 32px rgba(0,0,0,0.5);
+      border-color: var(--accent-zombie);
+    }
+
+    .hud-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hud-title::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: var(--accent-reading);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .state-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px;
+      font-weight: 600;
+      padding: 16px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 20px;
+      transition: all 0.3s ease;
+      background: var(--bg-primary);
+    }
+
+    .state-IDLE { color: var(--accent-idle); }
+    .state-READING_FLOW { 
+      color: var(--accent-reading); 
+      text-shadow: 0 0 20px var(--accent-reading);
+    }
+    .state-SCANNING_ZOMBIE { 
+      color: var(--accent-zombie);
+      text-shadow: 0 0 20px var(--accent-zombie);
+    }
+    .state-NAVIGATING { color: var(--accent-navigating); }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .metric-card {
+      background: var(--bg-primary);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .metric-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .metric-card.highlight .metric-value {
+      color: var(--accent-reading);
+    }
+
+    /* Z-Score Bar */
+    .zscore-bar {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .zscore-track {
+      height: 12px;
+      background: var(--bg-primary);
+      border-radius: 6px;
+      position: relative;
+      overflow: visible;
+      margin: 8px 0;
+    }
+
+    .zscore-zones {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .zscore-zone {
+      flex: 1;
+    }
+
+    .zscore-zone.zombie-low { background: rgba(255, 71, 87, 0.2); }
+    .zscore-zone.reading { background: rgba(0, 212, 170, 0.2); }
+    .zscore-zone.zombie-high { background: rgba(255, 71, 87, 0.2); }
+
+    .zscore-marker {
+      position: absolute;
+      top: 50%;
+      width: 4px;
+      height: 20px;
+      background: var(--text-primary);
+      border-radius: 2px;
+      transform: translate(-50%, -50%);
+      transition: left 0.1s ease;
+      box-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+
+    .zscore-labels {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+
+    /* Stop Density Bar */
+    .density-bar {
+      margin-top: 16px;
+    }
+
+    .density-track {
+      height: 8px;
+      background: var(--bg-primary);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+
+    .density-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-zombie), var(--accent-reading));
+      border-radius: 4px;
+      transition: width 0.2s ease;
+    }
+
+    /* Speed History Chart */
+    .speed-history {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .speed-history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .speed-history-header .metric-label {
+      margin-bottom: 0;
+    }
+
+    .speed-history-stats {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+
+    .speed-chart {
+      height: 60px;
+      background: var(--bg-primary);
+      border-radius: 8px;
+      padding: 8px;
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      overflow: hidden;
+    }
+
+    .speed-bar {
+      flex: 1;
+      min-width: 4px;
+      background: var(--accent-reading);
+      border-radius: 2px 2px 0 0;
+      transition: height 0.1s ease, background-color 0.1s ease;
+    }
+
+    .speed-bar.idle {
+      background: var(--accent-idle);
+    }
+
+    .speed-bar.reading {
+      background: var(--accent-reading);
+    }
+
+    .speed-bar.zombie {
+      background: var(--accent-zombie);
+    }
+
+    .speed-bar.navigating {
+      background: var(--accent-navigating);
+    }
+
+    .speed-scale {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .speed-values-toggle {
+      margin-top: 8px;
+    }
+
+    .speed-values-toggle summary {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .speed-values-toggle summary:hover {
+      color: var(--text-secondary);
+    }
+
+    .speed-values-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 4px;
+      margin-top: 8px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .speed-value-item {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      padding: 3px 4px;
+      background: var(--bg-primary);
+      border-radius: 3px;
+      text-align: center;
+      color: var(--text-secondary);
+    }
+
+    .speed-value-item.latest {
+      color: var(--accent-reading);
+      background: rgba(0, 212, 170, 0.15);
+    }
+
+    /* Content Area */
+    .content-area {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 60px 24px 200px;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 100px 0 80px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 60px;
+    }
+
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-reading), #00a8cc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: var(--text-secondary);
+    }
+
+    .instruction {
+      background: linear-gradient(145deg, var(--bg-secondary), var(--bg-tertiary));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+
+    .instruction h3 {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--accent-reading);
+      margin-bottom: 12px;
+    }
+
+    .instruction ul {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .instruction li {
+      padding: 8px 0;
+      padding-left: 24px;
+      position: relative;
+      color: var(--text-secondary);
+    }
+
+    .instruction li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: var(--accent-reading);
+    }
+
+    article {
+      margin-bottom: 60px;
+    }
+
+    article h2 {
+      font-size: 28px;
+      font-weight: 500;
+      margin-bottom: 20px;
+      color: var(--text-primary);
+    }
+
+    article p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+
+    .fake-image {
+      width: 100%;
+      height: 200px;
+      background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+      border-radius: 12px;
+      margin: 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+    }
+
+    .controls {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .btn-primary {
+      background: var(--accent-reading);
+      color: var(--bg-primary);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 20px var(--accent-reading);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-secondary);
+    }
+  </style>
+</head>
+<body>
+  <!-- HUD Panel -->
+  <div class="hud-panel" id="hudPanel">
+    <div class="hud-title">
+      <span>Behavior Analysis Engine</span>
+    </div>
+    
+    <div class="state-display state-IDLE" id="stateDisplay">IDLE</div>
+    
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Speed (px/s)</div>
+        <div class="metric-value" id="metricSpeed">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Mean</div>
+        <div class="metric-value" id="metricMean">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">StdDev</div>
+        <div class="metric-value" id="metricStdDev">0</div>
+      </div>
+      <div class="metric-card highlight">
+        <div class="metric-label">Z-Score</div>
+        <div class="metric-value" id="metricZScore">0.00</div>
+      </div>
+    </div>
+
+    <div class="zscore-bar">
+      <div class="metric-label">Z-Score 分佈</div>
+      <div class="zscore-track">
+        <div class="zscore-zones">
+          <div class="zscore-zone zombie-low"></div>
+          <div class="zscore-zone reading"></div>
+          <div class="zscore-zone zombie-high"></div>
+        </div>
+        <div class="zscore-marker" id="zscoreMarker"></div>
+      </div>
+      <div class="zscore-labels">
+        <span>-3</span>
+        <span>-1</span>
+        <span>0.8</span>
+        <span>1.5</span>
+        <span>+3</span>
+      </div>
+    </div>
+
+    <div class="density-bar">
+      <div class="metric-label">Stop Density: <span id="metricDensity">0%</span></div>
+      <div class="density-track">
+        <div class="density-fill" id="densityFill" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="speed-history">
+      <div class="speed-history-header">
+        <div class="metric-label">Speed History (近30筆)</div>
+        <div class="speed-history-stats">
+          Max: <span id="speedMax">0</span> | Avg: <span id="speedAvg">0</span>
+        </div>
+      </div>
+      <div class="speed-chart" id="speedChart">
+        <!-- Speed bars will be generated here -->
+      </div>
+      <div class="speed-scale">
+        <span>0</span>
+        <span id="speedScaleMax">500 px/s</span>
+      </div>
+      <details class="speed-values-toggle">
+        <summary>▸ 顯示數值列表</summary>
+        <div class="speed-values-grid" id="speedValuesGrid">
+          <!-- Speed values will be listed here -->
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Content Area -->
+  <div class="content-area">
+    <div class="hero">
+      <h1>滾動行為分析</h1>
+      <p>請嘗試不同的滾動方式，觀察右側面板的狀態變化</p>
+    </div>
+
+    <div class="instruction">
+      <h3>測試指南</h3>
+      <ul>
+        <li><strong style="color: var(--accent-reading)">READING_FLOW：</strong>慢慢滾動，每段停留閱讀</li>
+        <li><strong style="color: var(--accent-zombie)">SCANNING_ZOMBIE：</strong>快速連續滾動，不停留</li>
+        <li><strong style="color: var(--accent-idle)">IDLE：</strong>完全不動</li>
+        <li><strong style="color: var(--accent-navigating)">NAVIGATING：</strong>過渡狀態</li>
+      </ul>
+    </div>
+
+    <article>
+      <h2>什麼是 Doomscrolling？</h2>
+      <p>Doomscrolling（末日滾動）是指無意識地不斷滾動社交媒體動態，即使內容讓人感到沮喪或焦慮。這種行為在疫情期間變得更加普遍。</p>
+      <div class="fake-image">[ 示意圖：社交媒體動態 ]</div>
+      <p>研究表明，這種行為會對心理健康產生負面影響，包括增加焦慮、抑鬱和睡眠障礙的風險。</p>
+    </article>
+
+    <article>
+      <h2>識別滾動模式</h2>
+      <p>本引擎使用兩個核心指標來區分「閱讀」和「掃描」行為：</p>
+      <p><strong>Z-Score（標準分數）：</strong>衡量當前速度與用戶基線的偏離程度。高 Z-Score 表示異常快速的滾動。</p>
+      <div class="fake-image">[ 圖表：Z-Score 分佈 ]</div>
+      <p><strong>Stop Density（停頓密度）：</strong>衡量用戶在最近時間窗口內停頓的頻率。閱讀行為呈現「階梯式」模式（滾動→停頓→滾動）。</p>
+    </article>
+
+    <article>
+      <h2>階梯式閱讀模式</h2>
+      <p>當用戶真正閱讀內容時，會呈現明顯的「階梯式」滾動模式：</p>
+      <div class="fake-image">[ 動畫：階梯式滾動圖 ]</div>
+      <p>1. 滾動到新內容</p>
+      <p>2. 停下來閱讀</p>
+      <p>3. 處理完畢後繼續滾動</p>
+      <p>這種模式的特徵是高停頓密度（通常 > 30%）和正常範圍內的 Z-Score。</p>
+    </article>
+
+    <article>
+      <h2>Zombie Scrolling 特徵</h2>
+      <p>相反，「殭屍滾動」的特徵是：</p>
+      <p>• 持續平滑的滾動，幾乎沒有停頓</p>
+      <p>• 速度相對穩定或異常快速</p>
+      <p>• 低停頓密度（通常 < 10%）</p>
+      <div class="fake-image">[ 對比圖：閱讀 vs 掃描 ]</div>
+    </article>
+
+    <article>
+      <h2>技術實現細節</h2>
+      <p>為了確保穩健的分類，我們採用了多項統計校正：</p>
+      <p><strong>零膨脹校正：</strong>只有活躍速度（> 15px/s）才會納入基線計算。</p>
+      <p><strong>異常值過濾：</strong>極端速度（> 2000px/s）不會污染基線。</p>
+      <div class="fake-image">[ 程式碼片段 ]</div>
+      <p><strong>最小變異性保護：</strong>防止當用戶以恆定速度滾動時 Z-Score 爆炸。</p>
+    </article>
+
+    <article>
+      <h2>滯後機制</h2>
+      <p>為了防止狀態閃爍，我們實現了滯後（Hysteresis）機制：</p>
+      <p>• 狀態變化需要連續 3 個採樣點（300ms）確認</p>
+      <p>• 閱讀期間的短暫停頓被視為閱讀的一部分</p>
+      <div class="fake-image">[ 狀態機圖示 ]</div>
+    </article>
+
+    <article>
+      <h2>應用場景</h2>
+      <p>這個行為分析引擎可以應用於：</p>
+      <p>• 瀏覽器擴展：提醒用戶注意滾動習慣</p>
+      <p>• 數位健康工具：追蹤和分析使用模式</p>
+      <p>• 研究工具：收集關於閱讀行為的數據</p>
+      <div class="fake-image">[ 應用示例截圖 ]</div>
+    </article>
+
+    <article>
+      <h2>未來發展方向</h2>
+      <p>我們正在考慮以下改進：</p>
+      <p>• 結合視線追蹤數據</p>
+      <p>• 個人化基線學習</p>
+      <p>• 多平台支援</p>
+      <p>• 更精細的注意力分級</p>
+      <div class="fake-image">[ 路線圖 ]</div>
+    </article>
+
+    <article>
+      <h2>結語</h2>
+      <p>意識到自己的滾動習慣是改變的第一步。通過這個工具，我們希望幫助用戶更好地理解和管理他們的數位消費行為。</p>
+      <p>繼續向下滾動以測試更多場景...</p>
+    </article>
+
+    <!-- Extra content for more scrolling -->
+    <article>
+      <h2>附錄 A：配置參數</h2>
+      <p>SAMPLING_RATE_MS: 100 (10Hz)</p>
+      <p>BASELINE_WINDOW_SIZE: 300 samples</p>
+      <p>STAIRCASE_WINDOW_SIZE: 20 samples</p>
+      <p>NOISE_THRESHOLD_PX: 15</p>
+      <p>MAX_VALID_SPEED_PX: 2000</p>
+      <p>MIN_HUMAN_VARIABILITY: 50</p>
+      <div class="fake-image">[ 配置表格 ]</div>
+    </article>
+
+    <article>
+      <h2>附錄 B：數學公式</h2>
+      <p>速度計算：v_t = |scrollTop_t - scrollTop_{t-1}| / Δt × 1000</p>
+      <p>Z-Score：Z_t = (v_t - μ) / σ_effective</p>
+      <p>停頓密度：StopDensity = Count(v_i < NoiseThreshold) / WindowSize</p>
+      <div class="fake-image">[ 公式推導 ]</div>
+    </article>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-secondary" id="btnReset">Reset</button>
+    <button class="btn btn-primary" id="btnToggle">Start</button>
+  </div>
+
+  <script type="module">
+    // Inline implementation for demo (in production, import from compiled module)
+    const CONFIG = {
+      SAMPLING_RATE_MS: 100,
+      BASELINE_WINDOW_SIZE: 300,
+      STAIRCASE_WINDOW_SIZE: 20,
+      NOISE_THRESHOLD_PX: 20,
+      MAX_VALID_SPEED_PX: 2000,
+      MIN_HUMAN_VARIABILITY: 50,
+      ZOMBIE_Z_THRESHOLD: 1.2,     // Easier to enter zombie
+      READING_Z_UPPER: 0.6,        // Narrowed reading range
+      READING_Z_LOWER: -0.8,
+      STAIRCASE_DENSITY_MIN: 0.45  // Reading requires more stops
+    };
+
+    class BehaviorAnalysisEngine {
+      constructor() {
+        this.lastScrollTop = window.scrollY;
+        this.lastTime = Date.now();
+        this.timer = null;
+        this.activeSpeedHistory = [];
+        this.recentRawHistory = [];
+        this.currentState = 'IDLE';
+        this.pendingState = 'IDLE';
+        this.stabilityCounter = 0;
+        this.metrics = {
+          currentSpeed: 0,
+          meanSpeed: 0,
+          stdDev: 0,
+          effectiveSigma: 0,
+          zScore: 0,
+          stopDensity: 0
+        };
+      }
+
+      getState() { return this.currentState; }
+      getMetrics() { return { ...this.metrics }; }
+
+      start() {
+        if (this.timer) return;
+        this.timer = setInterval(() => this.tick(), CONFIG.SAMPLING_RATE_MS);
+        console.log("[BehaviorEngine] Started");
+      }
+
+      stop() {
+        if (this.timer) {
+          clearInterval(this.timer);
+          this.timer = null;
+        }
+        console.log("[BehaviorEngine] Stopped");
+      }
+
+      reset() {
+        this.activeSpeedHistory = [];
+        this.recentRawHistory = [];
+        this.currentState = 'IDLE';
+        this.pendingState = 'IDLE';
+        this.stabilityCounter = 0;
+        this.metrics = { currentSpeed: 0, meanSpeed: 0, stdDev: 0, effectiveSigma: 0, zScore: 0, stopDensity: 0 };
+        this.lastScrollTop = window.scrollY;
+        this.lastTime = Date.now();
+      }
+
+      tick() {
+        const now = Date.now();
+        const currentScrollTop = window.scrollY;
+        const timeDiff = now - this.lastTime;
+        if (timeDiff === 0) return;
+        
+        // Clamp timeDiff to prevent abnormal values
+        const clampedTimeDiff = Math.min(timeDiff, 200);
+
+        const distance = Math.abs(currentScrollTop - this.lastScrollTop);
+        const instantSpeed = (distance / clampedTimeDiff) * 1000;
+
+        // Set currentSpeed IMMEDIATELY
+        this.metrics.currentSpeed = instantSpeed;
+
+        this.updateBuffers(instantSpeed);
+        this.calculateStatistics(instantSpeed);
+        const stopDensity = this.calculateStopDensity();
+        this.metrics.stopDensity = stopDensity;
+
+        const rawState = this.determineRawState(instantSpeed, this.metrics.zScore, stopDensity);
+        this.applyHysteresis(rawState);
+
+        this.lastScrollTop = currentScrollTop;
+        this.lastTime = now;
+
+        // Emit metrics update for UI
+        window.dispatchEvent(new CustomEvent('metrics-update', { detail: this.metrics }));
+      }
+
+      updateBuffers(speed) {
+        this.recentRawHistory.push(speed);
+        if (this.recentRawHistory.length > CONFIG.STAIRCASE_WINDOW_SIZE) {
+          this.recentRawHistory.shift();
+        }
+
+        if (speed > CONFIG.NOISE_THRESHOLD_PX && speed < CONFIG.MAX_VALID_SPEED_PX) {
+          this.activeSpeedHistory.push(speed);
+          if (this.activeSpeedHistory.length > CONFIG.BASELINE_WINDOW_SIZE) {
+            this.activeSpeedHistory.shift();
+          }
+        }
+      }
+
+      calculateStatistics(currentSpeed) {
+        const n = this.activeSpeedHistory.length;
+        if (n < 10) {
+          this.metrics.meanSpeed = 0;
+          this.metrics.stdDev = 1;
+          this.metrics.zScore = 0;
+          this.metrics.currentSpeed = currentSpeed;
+          return;
+        }
+
+        const sum = this.activeSpeedHistory.reduce((a, b) => a + b, 0);
+        const mean = sum / n;
+        const sumSqDiff = this.activeSpeedHistory.reduce((a, b) => a + Math.pow(b - mean, 2), 0);
+        const stdDev = Math.sqrt(sumSqDiff / n);
+        const effectiveSigma = Math.max(stdDev, CONFIG.MIN_HUMAN_VARIABILITY);
+        const zScore = (currentSpeed - mean) / effectiveSigma;
+
+        this.metrics.currentSpeed = currentSpeed;
+        this.metrics.meanSpeed = mean;
+        this.metrics.stdDev = stdDev;
+        this.metrics.effectiveSigma = effectiveSigma;
+        this.metrics.zScore = zScore;
+      }
+
+      calculateStopDensity() {
+        if (this.recentRawHistory.length === 0) return 0;
+        const stopCount = this.recentRawHistory.filter(s => s < CONFIG.NOISE_THRESHOLD_PX).length;
+        return stopCount / this.recentRawHistory.length;
+      }
+
+      determineRawState(speed, zScore, stopDensity) {
+        // Count how many recent samples have actual movement
+        const activeCount = this.recentRawHistory.filter(s => s >= CONFIG.NOISE_THRESHOLD_PX).length;
+        const hasRecentActivity = activeCount >= 2;
+        
+        // 1. IDLE Check - No movement or very little recent activity
+        if (speed < CONFIG.NOISE_THRESHOLD_PX) {
+          if (stopDensity >= 0.8 && !hasRecentActivity) {
+            return 'IDLE';
+          }
+          if (stopDensity >= 0.6 && stopDensity < 0.95 && hasRecentActivity) {
+            return 'READING_FLOW';
+          }
+          return 'IDLE';
+        }
+
+        // Early exit from READING_FLOW: easier to exit
+        if (this.currentState === 'READING_FLOW') {
+          if (stopDensity < 0.4 || zScore > 0.4) {
+            return 'NAVIGATING';
+          }
+        }
+
+        // 2. ZOMBIE Check - EASIER TO TRIGGER
+        const hasEnoughData = this.recentRawHistory.length >= 8;
+        if (hasEnoughData) {
+          if (zScore > CONFIG.ZOMBIE_Z_THRESHOLD && stopDensity < 0.25) {
+            return 'SCANNING_ZOMBIE';
+          }
+          if (stopDensity < 0.15) {
+            return 'SCANNING_ZOMBIE';
+          }
+        }
+
+        // 3. READING Check - STRICTER CONDITIONS
+        if (zScore >= CONFIG.READING_Z_LOWER && zScore <= CONFIG.READING_Z_UPPER) {
+          if (stopDensity >= CONFIG.STAIRCASE_DENSITY_MIN && stopDensity < 0.85) {
+            return 'READING_FLOW';
+          }
+        }
+        
+        // 4. Default to NAVIGATING - Now triggers more often
+        return 'NAVIGATING';
+      }
+
+      applyHysteresis(newState) {
+        let effectiveState = newState;
+        // Only maintain READING_FLOW during short pauses (not when completely stopped)
+        if (newState === 'IDLE' && this.currentState === 'READING_FLOW') {
+          if (this.metrics.stopDensity < 0.95) {
+            effectiveState = 'READING_FLOW'; // Short reading pause
+          }
+        }
+
+        if (effectiveState !== this.currentState) {
+          if (this.pendingState === effectiveState) {
+            this.stabilityCounter++;
+            // Require fewer ticks (2) when exiting READING_FLOW, otherwise 3
+            const requiredStability = (this.currentState === 'READING_FLOW') ? 2 : 3;
+            if (this.stabilityCounter >= requiredStability) {
+              this.currentState = effectiveState;
+              this.stabilityCounter = 0;
+              this.onStateChange(this.currentState);
+            }
+          } else {
+            this.pendingState = effectiveState;
+            this.stabilityCounter = 0;
+          }
+        } else {
+          this.stabilityCounter = 0;
+          this.pendingState = effectiveState;
+        }
+      }
+
+      onStateChange(newState) {
+        console.log(`[BehaviorEngine] State: ${newState}`, this.metrics);
+        window.dispatchEvent(new CustomEvent('attention-state-change', {
+          detail: { state: newState, metrics: { ...this.metrics } }
+        }));
+      }
+    }
+
+    // Initialize
+    const engine = new BehaviorAnalysisEngine();
+    let isRunning = false;
+    const SPEED_HISTORY_SIZE = 30;
+    let speedHistory = [];
+
+    // UI Elements
+    const hudPanel = document.getElementById('hudPanel');
+    const stateDisplay = document.getElementById('stateDisplay');
+    const metricSpeed = document.getElementById('metricSpeed');
+    const metricMean = document.getElementById('metricMean');
+    const metricStdDev = document.getElementById('metricStdDev');
+    const metricZScore = document.getElementById('metricZScore');
+    const metricDensity = document.getElementById('metricDensity');
+    const densityFill = document.getElementById('densityFill');
+    const zscoreMarker = document.getElementById('zscoreMarker');
+    const btnToggle = document.getElementById('btnToggle');
+    const btnReset = document.getElementById('btnReset');
+    const speedChart = document.getElementById('speedChart');
+    const speedMax = document.getElementById('speedMax');
+    const speedAvg = document.getElementById('speedAvg');
+    const speedScaleMax = document.getElementById('speedScaleMax');
+    const speedValuesGrid = document.getElementById('speedValuesGrid');
+
+    // Initialize speed chart bars
+    function initSpeedChart() {
+      speedChart.innerHTML = '';
+      for (let i = 0; i < SPEED_HISTORY_SIZE; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'speed-bar idle';
+        bar.style.height = '2px';
+        speedChart.appendChild(bar);
+      }
+    }
+    initSpeedChart();
+
+    // Update speed history chart
+    function updateSpeedHistory(speed, zScore, stopDensity) {
+      // Add to history
+      speedHistory.push({
+        speed: speed,
+        zScore: zScore,
+        stopDensity: stopDensity
+      });
+      if (speedHistory.length > SPEED_HISTORY_SIZE) {
+        speedHistory.shift();
+      }
+
+      // Calculate max for scaling
+      const speeds = speedHistory.map(h => h.speed);
+      const maxSpeed = Math.max(...speeds, 100);
+      const avgSpeed = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+      const scaleMax = Math.ceil(maxSpeed / 100) * 100;
+
+      // Update stats
+      speedMax.textContent = Math.round(maxSpeed);
+      speedAvg.textContent = Math.round(avgSpeed);
+      speedScaleMax.textContent = `${scaleMax} px/s`;
+
+      // Update bars
+      const bars = speedChart.children;
+      const startIdx = SPEED_HISTORY_SIZE - speedHistory.length;
+      
+      for (let i = 0; i < SPEED_HISTORY_SIZE; i++) {
+        const bar = bars[i];
+        const historyIdx = i - startIdx;
+        
+        if (historyIdx < 0 || historyIdx >= speedHistory.length) {
+          bar.style.height = '2px';
+          bar.className = 'speed-bar idle';
+        } else {
+          const data = speedHistory[historyIdx];
+          const heightPct = Math.max(2, (data.speed / scaleMax) * 100);
+          bar.style.height = `${heightPct}%`;
+          
+          // Determine bar color based on state logic
+          let barClass = 'navigating';
+          if (data.speed < CONFIG.NOISE_THRESHOLD_PX) {
+            barClass = 'idle';
+          } else if (data.zScore > CONFIG.ZOMBIE_Z_THRESHOLD || data.stopDensity < 0.1) {
+            barClass = 'zombie';
+          } else if (data.zScore > CONFIG.READING_Z_LOWER && data.zScore < CONFIG.READING_Z_UPPER && data.stopDensity >= CONFIG.STAIRCASE_DENSITY_MIN) {
+            barClass = 'reading';
+          }
+          bar.className = `speed-bar ${barClass}`;
+        }
+      }
+
+      // Update values grid
+      speedValuesGrid.innerHTML = '';
+      [...speedHistory].reverse().forEach((data, idx) => {
+        const item = document.createElement('div');
+        item.className = 'speed-value-item' + (idx === 0 ? ' latest' : '');
+        item.textContent = Math.round(data.speed);
+        speedValuesGrid.appendChild(item);
+      });
+    }
+
+    // Update UI on state change
+    window.addEventListener('attention-state-change', (e) => {
+      const { state } = e.detail;
+      stateDisplay.textContent = state.replace('_', ' ');
+      stateDisplay.className = `state-display state-${state}`;
+      hudPanel.className = `hud-panel state-${state}`;
+    });
+
+    // Update metrics display
+    window.addEventListener('metrics-update', (e) => {
+      const m = e.detail;
+      metricSpeed.textContent = Math.round(m.currentSpeed);
+      metricMean.textContent = Math.round(m.meanSpeed);
+      metricStdDev.textContent = Math.round(m.stdDev);
+      metricZScore.textContent = m.zScore.toFixed(2);
+      
+      const densityPct = (m.stopDensity * 100).toFixed(0);
+      metricDensity.textContent = `${densityPct}%`;
+      densityFill.style.width = `${densityPct}%`;
+
+      // Z-Score marker position (map -3 to 3 → 0% to 100%)
+      const clampedZ = Math.max(-3, Math.min(3, m.zScore));
+      const zPosition = ((clampedZ + 3) / 6) * 100;
+      zscoreMarker.style.left = `${zPosition}%`;
+
+      // Update speed history chart
+      updateSpeedHistory(m.currentSpeed, m.zScore, m.stopDensity);
+    });
+
+    // Button handlers
+    btnToggle.addEventListener('click', () => {
+      if (isRunning) {
+        engine.stop();
+        btnToggle.textContent = 'Start';
+        isRunning = false;
+      } else {
+        engine.start();
+        btnToggle.textContent = 'Stop';
+        isRunning = true;
+      }
+    });
+
+    btnReset.addEventListener('click', () => {
+      engine.reset();
+      stateDisplay.textContent = 'IDLE';
+      stateDisplay.className = 'state-display state-IDLE';
+      hudPanel.className = 'hud-panel';
+      metricSpeed.textContent = '0';
+      metricMean.textContent = '0';
+      metricStdDev.textContent = '0';
+      metricZScore.textContent = '0.00';
+      metricDensity.textContent = '0%';
+      densityFill.style.width = '0%';
+      zscoreMarker.style.left = '50%';
+      
+      // Reset speed history
+      speedHistory = [];
+      speedMax.textContent = '0';
+      speedAvg.textContent = '0';
+      speedScaleMax.textContent = '500 px/s';
+      speedValuesGrid.innerHTML = '';
+      initSpeedChart();
+    });
+  </script>
+</body>
+</html>

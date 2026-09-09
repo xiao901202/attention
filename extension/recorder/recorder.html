@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行為錄製中 | Recording</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="recorder.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Setup Phase -->
+    <div class="phase phase-setup" id="phaseSetup">
+      <div class="setup-card">
+        <div class="setup-icon">🎬</div>
+        <h1>行為指紋錄製</h1>
+        <p>錄製你的螢幕和滾動行為，用於生成行為數學指紋</p>
+        
+        <div class="setup-options">
+          <div class="option-group">
+            <label>錄製時長</label>
+            <select id="recordDuration">
+              <option value="30">30 秒</option>
+              <option value="60">1 分鐘</option>
+              <option value="120">2 分鐘</option>
+              <option value="180" selected>3 分鐘</option>
+              <option value="300">5 分鐘</option>
+              <option value="600">10 分鐘</option>
+            </select>
+          </div>
+        </div>
+        
+        <button class="btn-start" id="btnStart">
+          <span class="btn-icon">⏺️</span>
+          開始錄製
+        </button>
+        
+        <div class="setup-note">
+          點擊後會請求螢幕分享權限，選擇後即開始錄製
+        </div>
+      </div>
+    </div>
+
+    <!-- Crop Phase -->
+    <div class="phase phase-crop" id="phaseCrop" style="display: none;">
+      <div class="crop-card">
+        <div class="crop-title">
+          <h2>✂️ 選擇錄製區域</h2>
+          <p>拖拉綠色框線來選擇要錄製的區域，或跳過以錄製全螢幕</p>
+        </div>
+        <div class="crop-preview-wrap" id="cropPreviewWrap">
+          <video id="cropPreview" autoplay muted playsinline></video>
+          <div class="crop-box" id="cropBox">
+            <div class="crop-handle" data-pos="nw"></div>
+            <div class="crop-handle" data-pos="ne"></div>
+            <div class="crop-handle" data-pos="sw"></div>
+            <div class="crop-handle" data-pos="se"></div>
+            <div class="crop-size-label" id="cropSizeLabel">1920 × 1080</div>
+          </div>
+        </div>
+        <div class="crop-actions">
+          <button class="btn-skip-crop" id="btnSkipCrop">跳過 (全螢幕)</button>
+          <button class="btn-confirm-crop" id="btnConfirmCrop">✂️ 確認裁切並開始錄製</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recording Phase -->
+    <div class="phase phase-recording" id="phaseRecording" style="display: none;">
+      <div class="recording-header">
+        <div class="recording-status">
+          <span class="recording-dot"></span>
+          <span>錄製中</span>
+        </div>
+        <div class="recording-timer" id="recordingTimer">00:00 / 03:00</div>
+      </div>
+      
+      <div class="recording-preview">
+        <video id="previewVideo" autoplay muted playsinline></video>
+        <div class="rec-crop-indicator" id="recCropIndicator"></div>
+      </div>
+      <div class="crop-note" id="cropNote" style="display: none;">
+        ✂️ 已設定區域標記 — 原始影片仍錄製全螢幕，區域資訊會隨紀錄保存
+      </div>
+      
+      <div class="recording-metrics">
+        <div class="metric">
+          <div class="metric-label">狀態</div>
+          <div class="metric-value" id="metricState">IDLE</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">速度</div>
+          <div class="metric-value"><span id="metricSpeed">0</span> px/s</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">滑鼠事件</div>
+          <div class="metric-value" id="metricMouseEvents">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">數據點</div>
+          <div class="metric-value" id="metricDataPoints">0</div>
+        </div>
+        <div class="metric metric-ai">
+          <div class="metric-label">回顧方式</div>
+          <div class="metric-value">本機固定題本</div>
+        </div>
+      </div>
+      
+      <div class="recording-controls">
+        <button class="btn-stop" id="btnStop">
+          <span class="btn-icon">⏹️</span>
+          停止錄製
+        </button>
+      </div>
+      
+      <div class="recording-hint">
+        你可以切換到其他視窗繼續瀏覽，系統會持續錄製
+      </div>
+    </div>
+
+    <!-- Processing Phase -->
+    <div class="phase phase-processing" id="phaseProcessing" style="display: none;">
+      <div class="processing-card">
+        <div class="processing-spinner"></div>
+        <h2>處理錄製資料中...</h2>
+        <p>請稍候，完成後將自動跳轉到標註頁面</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="recorder.js"></script>
+</body>
+</html>

@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行為片段標註 | Context-Aware Annotation</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="annotation.css">
+</head>
+<body>
+  <!-- ========== Processing Overlay ========== -->
+  <div class="processing-overlay" id="processingOverlay">
+    <div class="processing-card">
+      <div class="processing-spinner"></div>
+      <h2>🤖 AI 情境分析中</h2>
+      <p class="processing-sub" id="processingStatus">準備擷取影片畫面...</p>
+      <div class="processing-preview" id="processingPreview">
+        <img id="processingThumbnail" src="" alt="Frame preview">
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+        <div class="progress-text" id="progressText">0 / 0 片段</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Step-by-Step Annotation Wizard ========== -->
+  <div class="wizard-overlay" id="wizardOverlay">
+    <div class="wizard-container">
+      <!-- Wizard Header -->
+      <div class="wizard-header">
+        <div class="wizard-title">
+          <h2>✏️ 逐步標註</h2>
+          <div class="wizard-progress-text" id="wizardProgressText">片段 1 / 3</div>
+        </div>
+        <div class="wizard-header-actions">
+          <button class="btn-skip-overview" id="btnSkipToOverview">⏭ 跳至總覽</button>
+        </div>
+      </div>
+
+      <!-- Wizard Progress Bar -->
+      <div class="wizard-progress-bar">
+        <div class="wizard-progress-fill" id="wizardProgressFill" style="width: 0%"></div>
+      </div>
+
+      <!-- Wizard Body -->
+      <div class="wizard-body">
+        <div class="wizard-card">
+          <!-- Step Indicator -->
+          <div class="wizard-step-indicator" id="wizardStepIndicator">
+            <span class="step-number" id="wizardStepNumber">STEP 1</span>
+            <span class="step-label">請觀看影片片段，然後回答下方問題</span>
+          </div>
+
+          <!-- Section A: Video (small, centered) -->
+          <div class="wizard-video-row">
+            <div class="wizard-video-compact">
+              <video id="wizardVideo" playsinline></video>
+              <div class="wizard-video-controls-compact">
+                <button class="ctrl-btn-sm" id="wizardPlayPause">▶️</button>
+                <span class="wizard-time-compact" id="wizardTimeDisplay">00:00 - 00:30</span>
+                <button class="wizard-loop-btn-sm" id="wizardLoopBtn" title="循環播放">🔁</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section B: AI Summary (full width, prominent) -->
+          <div class="wizard-summary-card">
+            <div class="wizard-summary-header">
+              <span class="wizard-summary-icon">🤖</span>
+              <span class="wizard-summary-label">AI 偵測到的畫面內容</span>
+            </div>
+            <div class="wizard-summary-text" id="wizardContextSummary">載入中...</div>
+            <div class="wizard-segment-meta">
+              <span class="wizard-meta-state" id="wizardChipState">📖 READING_FLOW</span>
+              <span class="wizard-meta-time" id="wizardChipTime">00:00 - 00:30 (30s)</span>
+            </div>
+          </div>
+
+          <!-- Hidden context elements for backwards compatibility -->
+          <img id="wizardContextThumb" src="" alt="" style="display:none">
+
+          <!-- Divider -->
+          <div class="wizard-divider">
+            <span>📝 你的感受是什麼？</span>
+          </div>
+
+          <!-- Annotation Controls: Two-Column -->
+          <div class="wizard-controls-grid">
+            <!-- Left Column: Sliders -->
+            <div class="wizard-controls-left">
+              <!-- Agency -->
+              <div class="wizard-dim-compact">
+                <div class="dim-header-compact">
+                  <span>🎮 主控權 (Agency)</span>
+                  <span class="dim-value-compact" id="wizardAgencyValue">3</span>
+                </div>
+                <input type="range" min="1" max="5" value="3" step="1" class="dim-slider" id="wizardAgencySlider">
+                <div class="slider-labels-compact">
+                  <span id="wizardAgencyLabel1">不小心點進來的</span>
+                  <span id="wizardAgencyLabel5">我主動搜尋這個</span>
+                </div>
+              </div>
+              <!-- Cognitive Load -->
+              <div class="wizard-dim-compact">
+                <div class="dim-header-compact">
+                  <span>🧠 認知負荷 (Cognitive Load)</span>
+                  <span class="dim-value-compact" id="wizardLoadValue">3</span>
+                </div>
+                <input type="range" min="1" max="5" value="3" step="1" class="dim-slider" id="wizardLoadSlider">
+                <div class="slider-labels-compact">
+                  <span id="wizardLoadLabel1">完全看不懂</span>
+                  <span id="wizardLoadLabel5">需要認真思考</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Emotion Quadrant -->
+            <div class="wizard-controls-right">
+              <div class="wizard-emotion-label">💫 這段時間你的狀態是？</div>
+              <div class="quadrant-grid wizard-quadrant" id="wizardQuadrantGrid">
+                <button class="quad-card" data-value="emo_flow">
+                  <span class="quad-icon">🔥</span>
+                  <span class="quad-desc" id="wizardEmoFlowDesc">專注學習</span>
+                </button>
+                <button class="quad-card" data-value="emo_restorative">
+                  <span class="quad-icon">🌿</span>
+                  <span class="quad-desc" id="wizardEmoRestDesc">放鬆恢復</span>
+                </button>
+                <button class="quad-card" data-value="emo_zombie">
+                  <span class="quad-icon">🧟</span>
+                  <span class="quad-desc" id="wizardEmoZombieDesc">無意識滑動</span>
+                </button>
+                <button class="quad-card" data-value="emo_rabbit_hole">
+                  <span class="quad-icon">🕳️</span>
+                  <span class="quad-desc" id="wizardEmoRabbitDesc">越陷越深</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Navigation -->
+          <div class="wizard-nav">
+            <button class="wizard-nav-btn wizard-prev" id="wizardPrev">← 上一個</button>
+            <button class="wizard-nav-btn wizard-skip" id="wizardSkipSeg">跳過此片段</button>
+            <button class="wizard-nav-btn wizard-next" id="wizardNext">✅ 送出並繼續 →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wizard Progress Dots -->
+      <div class="wizard-dots" id="wizardDots">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Main App (Overview) ========== -->
+  <div class="app" id="overviewApp" style="display: none;">
+    <!-- Header -->
+    <header class="header">
+      <h1>✏️ 行為片段標註</h1>
+      <div class="header-actions">
+        <button class="btn-icon-only" id="btnNewRecording" title="新錄製">🎬</button>
+        <button class="btn-icon-only" id="btnDownloadVideo" title="下載影片">📹</button>
+        <button class="btn-icon-only" id="btnVLMTest" title="VLM 模型測試">🧪</button>
+        <button class="btn-secondary" id="btnExportCSV">📥 匯出 CSV</button>
+      </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="main-layout">
+      <!-- Left: Video + Timeline -->
+      <div class="video-section">
+        <div class="video-container">
+          <video id="videoPlayer" playsinline></video>
+          <div class="video-overlay" id="videoOverlay">
+            <div class="overlay-icon">📹</div>
+            <p>載入錄製影片中...</p>
+          </div>
+          <div class="video-controls">
+            <button class="ctrl-btn" id="btnPlayPause">▶️</button>
+            <span class="current-time" id="currentTime">00:00</span>
+            <span>/</span>
+            <span class="total-time" id="totalTime">00:00</span>
+            <input type="range" class="seek-bar" id="seekBar" min="0" max="100" value="0">
+          </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="timeline-section">
+          <div class="timeline-header">
+            <span>📊 行為時間軸</span>
+            <div class="timeline-legend">
+              <span class="legend reading">READING</span>
+              <span class="legend zombie">ZOMBIE</span>
+              <span class="legend navigating">NAVI</span>
+              <span class="legend idle">IDLE</span>
+            </div>
+          </div>
+          <div class="timeline-track" id="timelineTrack">
+            <div class="timeline-playhead" id="playhead"></div>
+          </div>
+          <div class="timeline-labels">
+            <span>00:00</span>
+            <span id="timelineEnd">03:00</span>
+          </div>
+        </div>
+
+        <!-- Mouse Data Preview -->
+        <div class="mouse-data-section">
+          <div class="mouse-header">
+            <span>🖱️ 滑鼠數據</span>
+            <span class="mouse-count" id="mouseCount">0 events</span>
+          </div>
+          <div class="mouse-preview" id="mousePreview">
+            <canvas id="mouseCanvas" width="400" height="100"></canvas>
+            <div class="mouse-hint">💡 點擊圖表查看詳細數據 | 使用右上角「匯出 CSV」下載完整數據</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Annotation Panel -->
+      <div class="annotation-section">
+        <div class="segments-header">
+          <h2>📋 行為片段列表</h2>
+          <div class="segment-stats">
+            <span>總片段: <strong id="totalCount">0</strong></span>
+            <span>待標註: <strong id="pendingCount">0</strong></span>
+            <span>已完成: <strong id="labeledCount">0</strong></span>
+          </div>
+        </div>
+
+        <div class="segments-list" id="segmentsList">
+          <!-- Segments rendered here -->
+        </div>
+
+        <!-- Dynamic Annotation Panel -->
+        <div class="annotation-panel" id="annotationPanel">
+          <!-- Context Area -->
+          <div class="context-area" id="contextArea">
+            <div class="context-thumbnail-wrap" id="contextThumbWrap">
+              <img class="context-thumbnail" id="contextThumbnail" src="" alt="">
+              <div class="context-no-thumb">📷</div>
+            </div>
+            <div class="context-info">
+              <div class="panel-time" id="panelTime">00:00 - 00:30</div>
+              <div class="context-summary" id="contextSummary">選擇一個綠色片段開始標註</div>
+            </div>
+          </div>
+
+          <!-- Dimension 1: Agency -->
+          <div class="dimension-group">
+            <div class="dim-header">
+              <span class="dim-icon">🎮</span>
+              <span class="dim-title">主控權 (Agency)</span>
+              <span class="dim-value" id="agencyValue">3</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" min="1" max="5" value="3" step="1" class="dim-slider" id="agencySlider">
+              <div class="slider-ticks">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+              </div>
+            </div>
+            <div class="slider-labels">
+              <span class="slider-label-left" id="agencyLabel1" title="">被動</span>
+              <span class="slider-label-right" id="agencyLabel5" title="">主動</span>
+            </div>
+          </div>
+
+          <!-- Dimension 2: Cognitive Load -->
+          <div class="dimension-group">
+            <div class="dim-header">
+              <span class="dim-icon">🧠</span>
+              <span class="dim-title">認知負荷 (Cognitive Load)</span>
+              <span class="dim-value" id="loadValue">3</span>
+            </div>
+            <div class="slider-wrap">
+              <input type="range" min="1" max="5" value="3" step="1" class="dim-slider" id="loadSlider">
+              <div class="slider-ticks">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+              </div>
+            </div>
+            <div class="slider-labels">
+              <span class="slider-label-left" id="loadLabel1" title="">輕鬆</span>
+              <span class="slider-label-right" id="loadLabel5" title="">燒腦</span>
+            </div>
+          </div>
+
+          <!-- Dimension 3: Emotion Quadrant -->
+          <div class="dimension-group">
+            <div class="dim-header">
+              <span class="dim-icon">💫</span>
+              <span class="dim-title">吸收成效與情緒</span>
+            </div>
+            <div class="quadrant-grid" id="quadrantGrid">
+              <button class="quad-card" data-value="emo_flow" data-state="Deep Flow">
+                <span class="quad-icon">🔥</span>
+                <span class="quad-name">Deep Flow</span>
+                <span class="quad-desc" id="emoFlowDesc">專注學習，有收穫</span>
+              </button>
+              <button class="quad-card" data-value="emo_restorative" data-state="Restorative">
+                <span class="quad-icon">🌿</span>
+                <span class="quad-name">Restorative</span>
+                <span class="quad-desc" id="emoRestDesc">放鬆恢復</span>
+              </button>
+              <button class="quad-card" data-value="emo_zombie" data-state="Zombie Scrolling">
+                <span class="quad-icon">🧟</span>
+                <span class="quad-name">Zombie</span>
+                <span class="quad-desc" id="emoZombieDesc">無意識滑動</span>
+              </button>
+              <button class="quad-card" data-value="emo_rabbit_hole" data-state="Rabbit Hole">
+                <span class="quad-icon">🕳️</span>
+                <span class="quad-name">Rabbit Hole</span>
+                <span class="quad-desc" id="emoRabbitDesc">越陷越深</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="annotation-actions">
+            <button class="btn-skip" id="btnSkip">跳過</button>
+            <button class="btn-confirm" id="btnConfirm">送出 →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Modal -->
+    <div class="modal-overlay" id="summaryModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>📊 標註完成 - 行為指紋摘要</h2>
+          <button class="modal-close" id="closeSummaryModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <div class="card-value" id="summaryTotal">0</div>
+              <div class="card-label">總片段</div>
+            </div>
+            <div class="summary-card deep-flow">
+              <div class="card-value" id="summaryDeepFlow">0</div>
+              <div class="card-label">Deep Flow</div>
+            </div>
+            <div class="summary-card rabbit-hole">
+              <div class="card-value" id="summaryRabbitHole">0</div>
+              <div class="card-label">Rabbit Hole</div>
+            </div>
+            <div class="summary-card restorative">
+              <div class="card-value" id="summaryRestorative">0</div>
+              <div class="card-label">Restorative</div>
+            </div>
+          </div>
+          <h4>CSV 預覽</h4>
+          <pre class="csv-preview" id="csvPreview"></pre>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="btnCloseSummary">關閉</button>
+          <button class="btn-primary" id="btnDownloadCSV">📥 下載 CSV</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">📭</div>
+      <h3>尚無錄製資料</h3>
+      <p>請先進行行為錄製</p>
+      <button class="btn-primary" id="btnStartRecording">🎬 開始錄製</button>
+    </div>
+  </div>
+
+  <script src="annotation.js"></script>
+</body>
+</html>

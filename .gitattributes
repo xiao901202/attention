@@ -1,0 +1,5 @@
+# Preserve artifact bytes; PDFs may look textual in their initial blocks.
+*.pdf binary
+*.pptx binary
+*.png binary
+*.zip binary

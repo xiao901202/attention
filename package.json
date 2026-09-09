@@ -1,0 +1,34 @@
+{
+  "name": "behavior-analysis-engine",
+  "version": "2.0.0",
+  "description": "Browser extension module for classifying user attention states based on scroll dynamics",
+  "main": "dist/BehaviorAnalysisEngine.js",
+  "types": "dist/BehaviorAnalysisEngine.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:annotation": "vite build --config extension/annotation/vite.config.js",
+    "build:project": "npm run build && npm run build:annotation",
+    "preview:annotation": "vite preview --config extension/annotation/vite.config.js --host 127.0.0.1 --port 5175 --strictPort",
+    "watch": "tsc --watch",
+    "dev": "npx live-server --port=8080"
+  },
+  "keywords": [
+    "scroll-analysis",
+    "behavior-detection",
+    "attention-state",
+    "browser-extension"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "live-server": "^1.2.2",
+    "typescript": "^5.3.3",
+    "vite": "^8.0.0"
+  },
+  "dependencies": {
+    "framer-motion": "^12.36.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  }
+}

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>滾動行為分析</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon"></div>
+        <span>滾動分析</span>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="mainToggle" checked>
+        <span class="slider"></span>
+      </label>
+    </header>
+
+    <!-- Current State -->
+    <section class="state-section">
+      <div class="state-card" id="stateCard">
+        <div class="state-icon" id="stateIcon"></div>
+        <div class="state-info">
+          <div class="state-label">目前狀態</div>
+          <div class="state-value" id="stateValue">--</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Metrics Grid -->
+    <section class="metrics-section">
+      <div class="section-title">即時數據</div>
+      <div class="metrics-grid">
+        <div class="metric-item">
+          <div class="metric-label">速度</div>
+          <div class="metric-value"><span id="speedValue">0</span> <small>px/s</small></div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-label">Z-Score</div>
+          <div class="metric-value" id="zscoreValue">0.00</div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-label">停頓密度</div>
+          <div class="metric-value"><span id="densityValue">0</span><small>%</small></div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-label">基線均值</div>
+          <div class="metric-value"><span id="meanValue">0</span> <small>px/s</small></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Session Stats -->
+    <section class="stats-section">
+      <div class="section-title">本次瀏覽統計</div>
+      <div class="stats-bars">
+        <div class="stat-bar">
+          <div class="stat-bar-header">
+            <span class="stat-label reading">📖 閱讀時間</span>
+            <span class="stat-value" id="readingTime">0:00</span>
+          </div>
+          <div class="stat-bar-track">
+            <div class="stat-bar-fill reading" id="readingBar" style="width: 0%"></div>
+          </div>
+        </div>
+        <div class="stat-bar">
+          <div class="stat-bar-header">
+            <span class="stat-label zombie">🧟 無意識滾動</span>
+            <span class="stat-value" id="zombieTime">0:00</span>
+          </div>
+          <div class="stat-bar-track">
+            <div class="stat-bar-fill zombie" id="zombieBar" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="ratio-display">
+        <div class="ratio-label">專注比例</div>
+        <div class="ratio-value" id="focusRatio">--%</div>
+      </div>
+    </section>
+
+    <!-- Recording Section -->
+    <section class="recording-section" id="recordingSection">
+      <div class="section-title">🎬 行為指紋錄製</div>
+      <div class="recording-controls">
+        <button class="btn-record" id="btnStartRecord">
+          <span class="btn-icon">🎬</span>
+          <span>開始錄製</span>
+        </button>
+        <button class="btn-annotate" id="btnAnnotate" disabled>
+          <span class="btn-icon">✏️</span>
+          <span>標註片段</span>
+        </button>
+      </div>
+      <div class="recording-info">
+        <small>錄製期間會追蹤螢幕畫面和所有滑鼠行為</small>
+      </div>
+    </section>
+
+    <!-- Tools -->
+    <section class="settings-section">
+      <div class="setting-item">
+        <span>左下角狀態浮窗</span>
+        <label class="toggle-switch small">
+          <input type="checkbox" id="indicatorToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="setting-item" style="cursor: pointer;" id="openVLMTest">
+        <span>🧪 VLM 模型測試台</span>
+        <span style="color: var(--text-muted); font-size: 12px;">→</span>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <button class="btn-reset" id="resetBtn">重置統計</button>
+      <div class="footer-note">可在任何網站錄製行為</div>
+    </footer>
+
+    <!-- Not Active State -->
+    <div class="not-active-overlay" id="notActiveOverlay">
+      <div class="not-active-content">
+        <div class="not-active-icon">🌐</div>
+        <div class="not-active-text">此頁面無法分析</div>
+        <div class="not-active-hint">請前往任何 http/https 網頁<br>（非 chrome:// 或系統頁面）</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

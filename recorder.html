@@ -1,0 +1,1721 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行為指紋錄製系統 | Behavior Fingerprint Recorder</title>
+  <style>
+    /* ============================================
+       Root Variables & Typography
+       ============================================ */
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+    
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a25;
+      --bg-card: #16161f;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-highlight: rgba(255, 255, 255, 0.15);
+      
+      --text-primary: #f0f0f5;
+      --text-secondary: #a0a0b0;
+      --text-muted: #606070;
+      
+      --accent-record: #ef4444;
+      --accent-reading: #22c55e;
+      --accent-rabbit: #f59e0b;
+      --accent-zombie: #ef4444;
+      --accent-navigating: #3b82f6;
+      --accent-idle: #6b7280;
+      --accent-chill: #8b5cf6;
+      
+      --gradient-record: linear-gradient(135deg, #ef4444, #dc2626);
+      --gradient-success: linear-gradient(135deg, #22c55e, #16a34a);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans TC', 'JetBrains Mono', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ============================================
+       Main Layout
+       ============================================ */
+    .app-container {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+      gap: 0;
+    }
+
+    /* Header */
+    .header {
+      grid-column: 1 / -1;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header h1 .icon {
+      font-size: 24px;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .duration-setting {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .duration-setting input {
+      width: 60px;
+      padding: 6px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    /* Main Content Area */
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+      overflow: hidden;
+    }
+
+    /* Video Container */
+    .video-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      position: relative;
+      min-height: 400px;
+    }
+
+    .video-container video {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .video-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--text-muted);
+    }
+
+    .video-placeholder .icon {
+      font-size: 64px;
+      opacity: 0.5;
+    }
+
+    .video-placeholder p {
+      font-size: 16px;
+    }
+
+    /* Recording Indicator */
+    .recording-indicator {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: rgba(239, 68, 68, 0.9);
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .recording-indicator.active {
+      opacity: 1;
+    }
+
+    .recording-indicator .dot {
+      width: 8px;
+      height: 8px;
+      background: #fff;
+      border-radius: 50%;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Timer Display */
+    .timer-display {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    /* Timeline Container */
+    .timeline-container {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      padding: 16px 24px;
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .timeline-header h3 {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .timeline-legend {
+      display: flex;
+      gap: 16px;
+      font-size: 11px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    .legend-color.reading { background: var(--accent-reading); }
+    .legend-color.zombie { background: var(--accent-zombie); }
+    .legend-color.navigating { background: var(--accent-navigating); }
+    .legend-color.idle { background: var(--accent-idle); }
+
+    /* Timeline Track */
+    .timeline-track {
+      height: 40px;
+      background: var(--bg-tertiary);
+      border-radius: 6px;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .timeline-segment {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      opacity: 0.85;
+      transition: opacity 0.2s;
+    }
+
+    .timeline-segment:hover {
+      opacity: 1;
+    }
+
+    .timeline-segment.READING_FLOW { background: var(--accent-reading); }
+    .timeline-segment.SCANNING_ZOMBIE { background: var(--accent-zombie); }
+    .timeline-segment.NAVIGATING { background: var(--accent-navigating); }
+    .timeline-segment.IDLE { background: var(--accent-idle); }
+
+    .timeline-playhead {
+      position: absolute;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      background: #fff;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .timeline-time-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-section {
+      padding: 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .sidebar-section h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+
+    /* Control Buttons */
+    .control-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 14px 20px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .btn-record {
+      background: var(--gradient-record);
+      color: #fff;
+    }
+
+    .btn-record:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+    }
+
+    .btn-record.recording {
+      background: var(--bg-tertiary);
+      border: 2px solid var(--accent-record);
+      color: var(--accent-record);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card);
+      border-color: var(--border-highlight);
+    }
+
+    .btn-success {
+      background: var(--gradient-success);
+      color: #fff;
+    }
+
+    .btn-success:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* Current State Display */
+    .current-state {
+      text-align: center;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border-radius: 10px;
+    }
+
+    .current-state-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .current-state-value {
+      font-size: 20px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .current-state-value.READING_FLOW { color: var(--accent-reading); }
+    .current-state-value.SCANNING_ZOMBIE { color: var(--accent-zombie); }
+    .current-state-value.NAVIGATING { color: var(--accent-navigating); }
+    .current-state-value.IDLE { color: var(--accent-idle); }
+
+    /* Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .metric-card {
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .metric-card .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .metric-card .value {
+      font-size: 16px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Segments List */
+    .segments-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .segment-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .segment-item:hover {
+      background: var(--bg-card);
+      transform: translateX(4px);
+    }
+
+    .segment-item.needs-review {
+      border-left: 3px solid var(--accent-reading);
+    }
+
+    .segment-item.labeled {
+      opacity: 0.7;
+    }
+
+    .segment-color {
+      width: 8px;
+      height: 40px;
+      border-radius: 4px;
+    }
+
+    .segment-info {
+      flex: 1;
+    }
+
+    .segment-time {
+      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+    }
+
+    .segment-state {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .segment-label {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+    }
+
+    .segment-label.deep-flow {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--accent-reading);
+    }
+
+    .segment-label.rabbit-hole {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--accent-rabbit);
+    }
+
+    .segment-label.chill {
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--accent-chill);
+    }
+
+    /* Footer */
+    .footer {
+      grid-column: 1 / -1;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-stats {
+      display: flex;
+      gap: 24px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .footer-stats span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ============================================
+       Modal - Annotation Dialog
+       ============================================ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow: hidden;
+      transform: translateY(20px);
+      transition: transform 0.3s;
+    }
+
+    .modal-overlay.active .modal {
+      transform: translateY(0);
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .modal-body {
+      padding: 24px;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .modal-video-preview {
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      aspect-ratio: 16/9;
+    }
+
+    .modal-video-preview video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .segment-info-banner {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    .annotation-question {
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 16px;
+      color: var(--text-primary);
+    }
+
+    .annotation-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .annotation-option {
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border: 2px solid transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+
+    .annotation-option:hover {
+      background: var(--bg-card);
+      border-color: var(--border-highlight);
+    }
+
+    .annotation-option.selected {
+      border-color: var(--accent-reading);
+      background: rgba(34, 197, 94, 0.1);
+    }
+
+    .annotation-option .option-title {
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .annotation-option .option-tag {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-left: 8px;
+    }
+
+    .annotation-option .option-tag.deep-flow {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--accent-reading);
+    }
+
+    .annotation-option .option-tag.rabbit-hole {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--accent-rabbit);
+    }
+
+    .annotation-option .option-tag.chill {
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--accent-chill);
+    }
+
+    .annotation-option .option-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .annotation-progress {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    /* ============================================
+       Summary Modal
+       ============================================ */
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .summary-stat {
+      background: var(--bg-tertiary);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .summary-stat .value {
+      font-size: 24px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .summary-stat .label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .summary-stat.deep-flow .value { color: var(--accent-reading); }
+    .summary-stat.rabbit-hole .value { color: var(--accent-rabbit); }
+    .summary-stat.chill .value { color: var(--accent-chill); }
+
+    .csv-preview {
+      background: var(--bg-tertiary);
+      border-radius: 10px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre;
+      line-height: 1.8;
+    }
+
+    /* ============================================
+       Responsive
+       ============================================ */
+    @media (max-width: 1024px) {
+      .app-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto auto;
+      }
+
+      .sidebar {
+        border-left: none;
+        border-top: 1px solid var(--border-color);
+        max-height: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <h1>
+        <span class="icon">🎬</span>
+        行為指紋錄製系統
+      </h1>
+      <div class="header-controls">
+        <div class="duration-setting">
+          <label>錄製時長：</label>
+          <input type="number" id="recordDuration" value="180" min="30" max="600" step="30">
+          <span>秒</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="video-container">
+        <video id="videoPlayer" playsinline></video>
+        <div class="video-placeholder" id="videoPlaceholder">
+          <span class="icon">📹</span>
+          <p>點擊「開始錄製」來捕捉螢幕和行為數據</p>
+        </div>
+        <div class="recording-indicator" id="recordingIndicator">
+          <span class="dot"></span>
+          <span>錄製中</span>
+        </div>
+        <div class="timer-display" id="timerDisplay">00:00 / 03:00</div>
+      </div>
+
+      <!-- Timeline -->
+      <div class="timeline-container">
+        <div class="timeline-header">
+          <h3>📊 行為時間軸</h3>
+          <div class="timeline-legend">
+            <div class="legend-item">
+              <div class="legend-color reading"></div>
+              <span>READING_FLOW</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color zombie"></div>
+              <span>SCANNING_ZOMBIE</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color navigating"></div>
+              <span>NAVIGATING</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color idle"></div>
+              <span>IDLE</span>
+            </div>
+          </div>
+        </div>
+        <div class="timeline-track" id="timelineTrack">
+          <div class="timeline-playhead" id="playhead" style="left: 0%"></div>
+        </div>
+        <div class="timeline-time-labels">
+          <span>00:00</span>
+          <span id="timelineEnd">03:00</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <h3>🎮 控制面板</h3>
+        <div class="control-buttons">
+          <button class="btn btn-record" id="btnRecord">
+            <span>⏺️</span> 開始錄製
+          </button>
+          <button class="btn btn-secondary" id="btnAnnotate" disabled>
+            <span>✏️</span> 標註 Deep Flow 片段
+          </button>
+          <button class="btn btn-secondary" id="btnExportCSV" disabled>
+            <span>📥</span> 匯出 CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>📈 即時狀態</h3>
+        <div class="current-state">
+          <div class="current-state-label">當前偵測狀態</div>
+          <div class="current-state-value IDLE" id="currentState">IDLE</div>
+        </div>
+        <div class="metrics-grid" style="margin-top: 16px;">
+          <div class="metric-card">
+            <div class="label">速度 (px/s)</div>
+            <div class="value" id="metricSpeed">0</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Stop Density</div>
+            <div class="value" id="metricStopDensity">0%</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Z-Score</div>
+            <div class="value" id="metricZScore">0.00</div>
+          </div>
+          <div class="metric-card">
+            <div class="label">Mean Speed</div>
+            <div class="value" id="metricMeanSpeed">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-section" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+        <h3>📋 需標註片段 (<span id="needsReviewCount">0</span>)</h3>
+        <div class="segments-list" id="segmentsList">
+          <p style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">
+            錄製完成後會在此顯示需要標註的片段
+          </p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-stats">
+        <span>📊 數據點: <strong id="dataPointCount">0</strong></span>
+        <span>⏱️ 片段數: <strong id="segmentCount">0</strong></span>
+        <span>✅ 已標註: <strong id="labeledCount">0</strong></span>
+      </div>
+      <div>
+        <span style="font-size: 12px; color: var(--text-muted);">
+          Behavior Fingerprint System v1.0
+        </span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Annotation Modal -->
+  <div class="modal-overlay" id="annotationModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>✏️ 標註行為片段</h2>
+        <button class="modal-close" id="closeModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-video-preview">
+          <video id="previewVideo" playsinline></video>
+        </div>
+        <div class="segment-info-banner">
+          <span>🕐 時間範圍: <strong id="modalSegmentTime">00:00 - 00:30</strong></span>
+          <span>📊 偵測狀態: <strong id="modalSegmentState">READING_FLOW</strong></span>
+        </div>
+        <p class="annotation-question">這段時間你在做什麼？請選擇最符合的描述：</p>
+        <div class="annotation-options" id="annotationOptions">
+          <div class="annotation-option" data-value="deep-flow">
+            <div class="option-title">
+              📚 很有收穫，我在認真讀資料
+              <span class="option-tag deep-flow">Deep Flow</span>
+            </div>
+            <div class="option-desc">專注閱讀、學習新知識、理解複雜概念</div>
+          </div>
+          <div class="annotation-option" data-value="rabbit-hole-angry">
+            <div class="option-title">
+              😤 覺得很煩/生氣，但我停不下來
+              <span class="option-tag rabbit-hole">Rabbit Hole</span>
+            </div>
+            <div class="option-desc">看到讓人不爽的內容、爭議話題、負面情緒</div>
+          </div>
+          <div class="annotation-option" data-value="rabbit-hole-confused">
+            <div class="option-title">
+              🤔 太難了看不懂，但我在試著理解
+              <span class="option-tag rabbit-hole">Rabbit Hole</span>
+            </div>
+            <div class="option-desc">內容超出理解範圍、反覆閱讀同一段</div>
+          </div>
+          <div class="annotation-option" data-value="chill">
+            <div class="option-title">
+              😌 單純放鬆，看朋友在幹嘛、好笑梗圖
+              <span class="option-tag chill">放鬆</span>
+            </div>
+            <div class="option-desc">社交瀏覽、娛樂內容、輕鬆消遣</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="annotation-progress">
+          片段 <span id="currentSegmentIndex">1</span> / <span id="totalSegments">5</span>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btnSkip">跳過</button>
+          <button class="btn btn-success" id="btnConfirm" disabled>確認標註</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Modal -->
+  <div class="modal-overlay" id="summaryModal">
+    <div class="modal" style="max-width: 700px;">
+      <div class="modal-header">
+        <h2>📊 標註完成 - 行為指紋摘要</h2>
+        <button class="modal-close" id="closeSummaryModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="summary-stats">
+          <div class="summary-stat">
+            <div class="value" id="summaryTotal">0</div>
+            <div class="label">總片段數</div>
+          </div>
+          <div class="summary-stat deep-flow">
+            <div class="value" id="summaryDeepFlow">0</div>
+            <div class="label">Deep Flow</div>
+          </div>
+          <div class="summary-stat rabbit-hole">
+            <div class="value" id="summaryRabbitHole">0</div>
+            <div class="label">Rabbit Hole</div>
+          </div>
+          <div class="summary-stat chill">
+            <div class="value" id="summaryChill">0</div>
+            <div class="label">放鬆</div>
+          </div>
+        </div>
+        <h4 style="margin-bottom: 12px; font-size: 14px;">📄 CSV 預覽</h4>
+        <div class="csv-preview" id="csvPreview"></div>
+      </div>
+      <div class="modal-footer">
+        <div></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btnCloseSummary">關閉</button>
+          <button class="btn btn-success" id="btnDownloadCSV">
+            <span>📥</span> 下載 CSV
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================
+    // Configuration
+    // ============================================
+    const CONFIG = {
+      TICK_INTERVAL_MS: 100,
+      NOISE_THRESHOLD_PX: 5,
+      ACTIVE_WINDOW_SIZE: 30,
+      STAIRCASE_WINDOW_SIZE: 10,
+      MIN_HUMAN_VARIABILITY: 50,
+      ZOMBIE_Z_THRESHOLD: 1.5,
+      READING_Z_LOWER: -1.5,
+      READING_Z_UPPER: 0.8,
+      STAIRCASE_DENSITY_MIN: 0.7,
+      STABILITY_TICKS_REQUIRED: 3,
+      MIN_SEGMENT_DURATION_MS: 3000, // 最小片段長度 3 秒
+    };
+
+    // ============================================
+    // State Management
+    // ============================================
+    const state = {
+      isRecording: false,
+      recordingStartTime: null,
+      recordDuration: 180, // seconds
+      
+      // Media
+      mediaStream: null,
+      mediaRecorder: null,
+      recordedChunks: [],
+      videoBlob: null,
+      
+      // Behavior Data
+      csvData: [],
+      segments: [],
+      currentSegmentStart: null,
+      currentSegmentState: 'IDLE',
+      
+      // Engine State
+      lastScrollTop: 0,
+      lastTickTime: 0,
+      activeSpeedHistory: [],
+      recentRawHistory: [],
+      currentState: 'IDLE',
+      pendingState: null,
+      stabilityCounter: 0,
+      
+      // Annotation
+      currentAnnotationIndex: 0,
+      selectedAnnotation: null,
+    };
+
+    // ============================================
+    // DOM Elements
+    // ============================================
+    const elements = {
+      videoPlayer: document.getElementById('videoPlayer'),
+      videoPlaceholder: document.getElementById('videoPlaceholder'),
+      recordingIndicator: document.getElementById('recordingIndicator'),
+      timerDisplay: document.getElementById('timerDisplay'),
+      timelineTrack: document.getElementById('timelineTrack'),
+      timelineEnd: document.getElementById('timelineEnd'),
+      playhead: document.getElementById('playhead'),
+      
+      btnRecord: document.getElementById('btnRecord'),
+      btnAnnotate: document.getElementById('btnAnnotate'),
+      btnExportCSV: document.getElementById('btnExportCSV'),
+      
+      currentState: document.getElementById('currentState'),
+      metricSpeed: document.getElementById('metricSpeed'),
+      metricStopDensity: document.getElementById('metricStopDensity'),
+      metricZScore: document.getElementById('metricZScore'),
+      metricMeanSpeed: document.getElementById('metricMeanSpeed'),
+      
+      segmentsList: document.getElementById('segmentsList'),
+      needsReviewCount: document.getElementById('needsReviewCount'),
+      dataPointCount: document.getElementById('dataPointCount'),
+      segmentCount: document.getElementById('segmentCount'),
+      labeledCount: document.getElementById('labeledCount'),
+      
+      recordDuration: document.getElementById('recordDuration'),
+      
+      // Modals
+      annotationModal: document.getElementById('annotationModal'),
+      previewVideo: document.getElementById('previewVideo'),
+      annotationOptions: document.getElementById('annotationOptions'),
+      modalSegmentTime: document.getElementById('modalSegmentTime'),
+      modalSegmentState: document.getElementById('modalSegmentState'),
+      currentSegmentIndex: document.getElementById('currentSegmentIndex'),
+      totalSegments: document.getElementById('totalSegments'),
+      btnConfirm: document.getElementById('btnConfirm'),
+      btnSkip: document.getElementById('btnSkip'),
+      closeModal: document.getElementById('closeModal'),
+      
+      summaryModal: document.getElementById('summaryModal'),
+      summaryTotal: document.getElementById('summaryTotal'),
+      summaryDeepFlow: document.getElementById('summaryDeepFlow'),
+      summaryRabbitHole: document.getElementById('summaryRabbitHole'),
+      summaryChill: document.getElementById('summaryChill'),
+      csvPreview: document.getElementById('csvPreview'),
+      btnDownloadCSV: document.getElementById('btnDownloadCSV'),
+      btnCloseSummary: document.getElementById('btnCloseSummary'),
+      closeSummaryModal: document.getElementById('closeSummaryModal'),
+    };
+
+    // ============================================
+    // Utility Functions
+    // ============================================
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function formatTimeMs(ms) {
+      return formatTime(ms / 1000);
+    }
+
+    // ============================================
+    // Behavior Analysis Engine (Embedded)
+    // ============================================
+    function calculateStatistics(history) {
+      if (history.length === 0) return { mean: 0, std: 0 };
+      const sum = history.reduce((a, b) => a + b, 0);
+      const mean = sum / history.length;
+      const squaredDiffs = history.map(x => Math.pow(x - mean, 2));
+      const variance = squaredDiffs.reduce((a, b) => a + b, 0) / history.length;
+      return { mean, std: Math.sqrt(variance) };
+    }
+
+    function calculateStopDensity(history) {
+      if (history.length === 0) return 1;
+      const stops = history.filter(speed => speed < CONFIG.NOISE_THRESHOLD_PX).length;
+      return stops / history.length;
+    }
+
+    function determineRawState(speed, zScore, stopDensity) {
+      // Early exit from READING_FLOW
+      if (state.currentState === 'READING_FLOW') {
+        if (stopDensity < 0.35 && zScore > 0.3) {
+          return 'NAVIGATING';
+        }
+      }
+
+      // 1. HIGH STOP DENSITY PATH - Mouse Wheel Support
+      if (stopDensity >= 0.6) {
+        return 'READING_FLOW';
+      }
+
+      // 2. IDLE Check
+      if (speed < CONFIG.NOISE_THRESHOLD_PX) return 'IDLE';
+
+      // 3. LOW STOP DENSITY PATH - Zombie/Fast Scrolling
+      if (stopDensity < 0.3) {
+        if (zScore > CONFIG.ZOMBIE_Z_THRESHOLD || stopDensity < 0.1) {
+          return 'SCANNING_ZOMBIE';
+        }
+        return 'NAVIGATING';
+      }
+
+      // 4. MEDIUM STOP DENSITY PATH
+      if (zScore > CONFIG.ZOMBIE_Z_THRESHOLD) return 'SCANNING_ZOMBIE';
+      if (zScore > CONFIG.READING_Z_LOWER && zScore < CONFIG.READING_Z_UPPER) {
+        if (stopDensity >= CONFIG.STAIRCASE_DENSITY_MIN) {
+          return 'READING_FLOW';
+        }
+      }
+
+      return 'NAVIGATING';
+    }
+
+    function applyHysteresis(newState) {
+      if (newState === state.currentState) {
+        state.pendingState = null;
+        state.stabilityCounter = 0;
+        return state.currentState;
+      }
+
+      if (newState === state.pendingState) {
+        state.stabilityCounter++;
+        const requiredStability = (state.currentState === 'READING_FLOW' && newState !== 'READING_FLOW') ? 2 : 3;
+        if (state.stabilityCounter >= requiredStability) {
+          state.pendingState = null;
+          state.stabilityCounter = 0;
+          return newState;
+        }
+      } else {
+        state.pendingState = newState;
+        state.stabilityCounter = 1;
+      }
+
+      return state.currentState;
+    }
+
+    function tick() {
+      if (!state.isRecording) return;
+
+      const now = performance.now();
+      const elapsed = now - state.recordingStartTime;
+      const scrollTop = window.scrollY;
+      
+      // Calculate speed
+      let speed = 0;
+      if (state.lastTickTime > 0) {
+        const deltaTime = now - state.lastTickTime;
+        const deltaPosition = Math.abs(scrollTop - state.lastScrollTop);
+        speed = (deltaPosition / deltaTime) * 1000;
+      }
+
+      state.lastScrollTop = scrollTop;
+      state.lastTickTime = now;
+
+      // Update buffers
+      state.recentRawHistory.push(speed);
+      if (state.recentRawHistory.length > CONFIG.STAIRCASE_WINDOW_SIZE) {
+        state.recentRawHistory.shift();
+      }
+
+      if (speed >= CONFIG.NOISE_THRESHOLD_PX) {
+        const { mean, std } = calculateStatistics(state.activeSpeedHistory);
+        const upperBound = mean + 3 * std;
+        if (state.activeSpeedHistory.length < 5 || speed <= upperBound) {
+          state.activeSpeedHistory.push(speed);
+          if (state.activeSpeedHistory.length > CONFIG.ACTIVE_WINDOW_SIZE) {
+            state.activeSpeedHistory.shift();
+          }
+        }
+      }
+
+      // Calculate metrics
+      const { mean, std } = calculateStatistics(state.activeSpeedHistory);
+      const effectiveStd = Math.max(std, CONFIG.MIN_HUMAN_VARIABILITY);
+      const zScore = mean > 0 ? (speed - mean) / effectiveStd : 0;
+      const stopDensity = calculateStopDensity(state.recentRawHistory);
+
+      // Determine state
+      const rawState = determineRawState(speed, zScore, stopDensity);
+      const newState = applyHysteresis(rawState);
+
+      // Check for state change
+      if (newState !== state.currentState) {
+        // End previous segment
+        if (state.currentSegmentStart !== null) {
+          const segmentEnd = elapsed;
+          const duration = segmentEnd - state.currentSegmentStart;
+          if (duration >= CONFIG.MIN_SEGMENT_DURATION_MS) {
+            state.segments.push({
+              startTime: state.currentSegmentStart,
+              endTime: segmentEnd,
+              state: state.currentSegmentState,
+              label: null,
+            });
+          }
+        }
+        // Start new segment
+        state.currentSegmentStart = elapsed;
+        state.currentSegmentState = newState;
+        state.currentState = newState;
+      }
+
+      // Record CSV data
+      state.csvData.push({
+        timestamp: elapsed,
+        scrollTop,
+        speed: speed.toFixed(2),
+        zScore: zScore.toFixed(4),
+        stopDensity: stopDensity.toFixed(4),
+        meanSpeed: mean.toFixed(2),
+        state: state.currentState,
+      });
+
+      // Update UI
+      updateMetricsUI(speed, zScore, stopDensity, mean);
+      updateTimerUI(elapsed);
+      updateTimelineUI(elapsed);
+
+      // Check if recording should stop
+      if (elapsed >= state.recordDuration * 1000) {
+        stopRecording();
+        return;
+      }
+
+      // Schedule next tick
+      setTimeout(tick, CONFIG.TICK_INTERVAL_MS);
+    }
+
+    // ============================================
+    // UI Update Functions
+    // ============================================
+    function updateMetricsUI(speed, zScore, stopDensity, mean) {
+      elements.currentState.textContent = state.currentState;
+      elements.currentState.className = `current-state-value ${state.currentState}`;
+      elements.metricSpeed.textContent = Math.round(speed);
+      elements.metricZScore.textContent = zScore.toFixed(2);
+      elements.metricStopDensity.textContent = `${Math.round(stopDensity * 100)}%`;
+      elements.metricMeanSpeed.textContent = Math.round(mean);
+      elements.dataPointCount.textContent = state.csvData.length;
+    }
+
+    function updateTimerUI(elapsed) {
+      const current = formatTimeMs(elapsed);
+      const total = formatTime(state.recordDuration);
+      elements.timerDisplay.textContent = `${current} / ${total}`;
+    }
+
+    function updateTimelineUI(elapsed) {
+      const percent = (elapsed / (state.recordDuration * 1000)) * 100;
+      elements.playhead.style.left = `${Math.min(percent, 100)}%`;
+    }
+
+    function renderTimeline() {
+      // Clear existing segments
+      const existingSegments = elements.timelineTrack.querySelectorAll('.timeline-segment');
+      existingSegments.forEach(s => s.remove());
+
+      const totalDuration = state.recordDuration * 1000;
+
+      state.segments.forEach(segment => {
+        const left = (segment.startTime / totalDuration) * 100;
+        const width = ((segment.endTime - segment.startTime) / totalDuration) * 100;
+
+        const segmentEl = document.createElement('div');
+        segmentEl.className = `timeline-segment ${segment.state}`;
+        segmentEl.style.left = `${left}%`;
+        segmentEl.style.width = `${width}%`;
+        segmentEl.title = `${formatTimeMs(segment.startTime)} - ${formatTimeMs(segment.endTime)}: ${segment.state}`;
+
+        segmentEl.addEventListener('click', () => {
+          seekToTime(segment.startTime);
+        });
+
+        elements.timelineTrack.appendChild(segmentEl);
+      });
+    }
+
+    function renderSegmentsList() {
+      const readingSegments = state.segments.filter(s => s.state === 'READING_FLOW');
+      elements.needsReviewCount.textContent = readingSegments.filter(s => !s.label).length;
+      elements.segmentCount.textContent = state.segments.length;
+      elements.labeledCount.textContent = state.segments.filter(s => s.label).length;
+
+      if (readingSegments.length === 0) {
+        elements.segmentsList.innerHTML = `
+          <p style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 20px;">
+            沒有偵測到 READING_FLOW 片段
+          </p>
+        `;
+        return;
+      }
+
+      elements.segmentsList.innerHTML = readingSegments.map((segment, index) => `
+        <div class="segment-item ${segment.label ? 'labeled' : 'needs-review'}" data-index="${state.segments.indexOf(segment)}">
+          <div class="segment-color" style="background: var(--accent-reading);"></div>
+          <div class="segment-info">
+            <div class="segment-time">${formatTimeMs(segment.startTime)} - ${formatTimeMs(segment.endTime)}</div>
+            <div class="segment-state">${segment.state}</div>
+          </div>
+          ${segment.label ? `<span class="segment-label ${segment.label}">${getLabelText(segment.label)}</span>` : ''}
+        </div>
+      `).join('');
+
+      // Add click listeners
+      elements.segmentsList.querySelectorAll('.segment-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const index = parseInt(item.dataset.index);
+          seekToTime(state.segments[index].startTime);
+        });
+      });
+    }
+
+    function getLabelText(label) {
+      const labels = {
+        'deep-flow': 'Deep Flow',
+        'rabbit-hole-angry': 'Rabbit Hole',
+        'rabbit-hole-confused': 'Rabbit Hole',
+        'chill': '放鬆',
+      };
+      return labels[label] || label;
+    }
+
+    function getLabelCategory(label) {
+      if (label === 'deep-flow') return 'deep-flow';
+      if (label && label.startsWith('rabbit-hole')) return 'rabbit-hole';
+      if (label === 'chill') return 'chill';
+      return null;
+    }
+
+    // ============================================
+    // Recording Functions
+    // ============================================
+    async function startRecording() {
+      try {
+        // Get screen stream
+        state.mediaStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { cursor: 'always' },
+          audio: false,
+        });
+
+        // Setup video preview
+        elements.videoPlayer.srcObject = state.mediaStream;
+        elements.videoPlayer.play();
+        elements.videoPlaceholder.style.display = 'none';
+        elements.videoPlayer.style.display = 'block';
+
+        // Setup MediaRecorder
+        state.mediaRecorder = new MediaRecorder(state.mediaStream, {
+          mimeType: 'video/webm;codecs=vp9',
+        });
+
+        state.recordedChunks = [];
+        state.mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            state.recordedChunks.push(e.data);
+          }
+        };
+
+        state.mediaRecorder.onstop = () => {
+          state.videoBlob = new Blob(state.recordedChunks, { type: 'video/webm' });
+          const url = URL.createObjectURL(state.videoBlob);
+          elements.videoPlayer.srcObject = null;
+          elements.videoPlayer.src = url;
+          elements.previewVideo.src = url;
+        };
+
+        // Start recording
+        state.mediaRecorder.start(1000);
+
+        // Initialize state
+        state.isRecording = true;
+        state.recordingStartTime = performance.now();
+        state.recordDuration = parseInt(elements.recordDuration.value) || 180;
+        state.csvData = [];
+        state.segments = [];
+        state.currentSegmentStart = 0;
+        state.currentSegmentState = 'IDLE';
+        state.currentState = 'IDLE';
+        state.activeSpeedHistory = [];
+        state.recentRawHistory = [];
+        state.lastScrollTop = window.scrollY;
+        state.lastTickTime = 0;
+
+        // Update UI
+        elements.btnRecord.innerHTML = '<span>⏹️</span> 停止錄製';
+        elements.btnRecord.classList.add('recording');
+        elements.recordingIndicator.classList.add('active');
+        elements.timelineEnd.textContent = formatTime(state.recordDuration);
+
+        // Handle stream end
+        state.mediaStream.getVideoTracks()[0].onended = () => {
+          if (state.isRecording) {
+            stopRecording();
+          }
+        };
+
+        // Start behavior tracking
+        tick();
+
+      } catch (err) {
+        console.error('Error starting recording:', err);
+        alert('無法開始錄製。請確保允許螢幕分享權限。');
+      }
+    }
+
+    function stopRecording() {
+      if (!state.isRecording) return;
+
+      state.isRecording = false;
+
+      // Finalize last segment
+      const elapsed = performance.now() - state.recordingStartTime;
+      if (state.currentSegmentStart !== null) {
+        const duration = elapsed - state.currentSegmentStart;
+        if (duration >= CONFIG.MIN_SEGMENT_DURATION_MS) {
+          state.segments.push({
+            startTime: state.currentSegmentStart,
+            endTime: elapsed,
+            state: state.currentSegmentState,
+            label: null,
+          });
+        }
+      }
+
+      // Stop media
+      if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+        state.mediaRecorder.stop();
+      }
+      if (state.mediaStream) {
+        state.mediaStream.getTracks().forEach(track => track.stop());
+      }
+
+      // Update UI
+      elements.btnRecord.innerHTML = '<span>⏺️</span> 開始錄製';
+      elements.btnRecord.classList.remove('recording');
+      elements.recordingIndicator.classList.remove('active');
+
+      // Enable annotation button if there are READING_FLOW segments
+      const readingSegments = state.segments.filter(s => s.state === 'READING_FLOW');
+      if (readingSegments.length > 0) {
+        elements.btnAnnotate.disabled = false;
+      }
+      elements.btnExportCSV.disabled = false;
+
+      // Render results
+      renderTimeline();
+      renderSegmentsList();
+
+      console.log('Recording stopped. Segments:', state.segments);
+      console.log('CSV data points:', state.csvData.length);
+    }
+
+    function seekToTime(timeMs) {
+      if (elements.videoPlayer.src) {
+        elements.videoPlayer.currentTime = timeMs / 1000;
+        elements.videoPlayer.play();
+      }
+    }
+
+    // ============================================
+    // Annotation Functions
+    // ============================================
+    function startAnnotation() {
+      const readingSegments = state.segments.filter(s => s.state === 'READING_FLOW' && !s.label);
+      if (readingSegments.length === 0) {
+        showSummary();
+        return;
+      }
+
+      state.currentAnnotationIndex = 0;
+      elements.totalSegments.textContent = readingSegments.length;
+      showAnnotationForSegment(0);
+      elements.annotationModal.classList.add('active');
+    }
+
+    function showAnnotationForSegment(index) {
+      const readingSegments = state.segments.filter(s => s.state === 'READING_FLOW' && !s.label);
+      if (index >= readingSegments.length) {
+        elements.annotationModal.classList.remove('active');
+        showSummary();
+        return;
+      }
+
+      const segment = readingSegments[index];
+      state.currentAnnotationIndex = index;
+      state.selectedAnnotation = null;
+
+      // Update modal UI
+      elements.currentSegmentIndex.textContent = index + 1;
+      elements.modalSegmentTime.textContent = `${formatTimeMs(segment.startTime)} - ${formatTimeMs(segment.endTime)}`;
+      elements.modalSegmentState.textContent = segment.state;
+
+      // Play video segment
+      if (elements.previewVideo.src) {
+        elements.previewVideo.currentTime = segment.startTime / 1000;
+        elements.previewVideo.play();
+
+        // Auto-pause at segment end
+        const checkEnd = () => {
+          if (elements.previewVideo.currentTime >= segment.endTime / 1000) {
+            elements.previewVideo.pause();
+            elements.previewVideo.currentTime = segment.startTime / 1000;
+          }
+        };
+        elements.previewVideo.ontimeupdate = checkEnd;
+      }
+
+      // Reset selection
+      document.querySelectorAll('.annotation-option').forEach(opt => {
+        opt.classList.remove('selected');
+      });
+      elements.btnConfirm.disabled = true;
+    }
+
+    function selectAnnotation(value) {
+      state.selectedAnnotation = value;
+      document.querySelectorAll('.annotation-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.value === value);
+      });
+      elements.btnConfirm.disabled = false;
+    }
+
+    function confirmAnnotation() {
+      const readingSegments = state.segments.filter(s => s.state === 'READING_FLOW' && !s.label);
+      const segment = readingSegments[state.currentAnnotationIndex];
+      const segmentIndex = state.segments.indexOf(segment);
+      
+      if (segmentIndex !== -1 && state.selectedAnnotation) {
+        state.segments[segmentIndex].label = state.selectedAnnotation;
+      }
+
+      // Move to next segment
+      showAnnotationForSegment(state.currentAnnotationIndex + 1);
+      renderSegmentsList();
+    }
+
+    function skipAnnotation() {
+      showAnnotationForSegment(state.currentAnnotationIndex + 1);
+    }
+
+    // ============================================
+    // Summary & Export Functions
+    // ============================================
+    function showSummary() {
+      elements.annotationModal.classList.remove('active');
+
+      // Calculate stats
+      const total = state.segments.length;
+      const deepFlow = state.segments.filter(s => s.label === 'deep-flow').length;
+      const rabbitHole = state.segments.filter(s => s.label && s.label.startsWith('rabbit-hole')).length;
+      const chill = state.segments.filter(s => s.label === 'chill').length;
+
+      elements.summaryTotal.textContent = total;
+      elements.summaryDeepFlow.textContent = deepFlow;
+      elements.summaryRabbitHole.textContent = rabbitHole;
+      elements.summaryChill.textContent = chill;
+
+      // Generate CSV preview
+      const csvContent = generateSegmentsCSV();
+      elements.csvPreview.textContent = csvContent.split('\n').slice(0, 15).join('\n') + '\n...';
+
+      elements.summaryModal.classList.add('active');
+    }
+
+    function generateSegmentsCSV() {
+      const header = 'start_time,end_time,start_formatted,end_formatted,detected_state,user_label,label_category,duration_sec';
+      const rows = state.segments.map(s => {
+        const startFormatted = formatTimeMs(s.startTime);
+        const endFormatted = formatTimeMs(s.endTime);
+        const duration = ((s.endTime - s.startTime) / 1000).toFixed(2);
+        const category = getLabelCategory(s.label) || '';
+        return `${s.startTime},${s.endTime},${startFormatted},${endFormatted},${s.state},${s.label || ''},${category},${duration}`;
+      });
+      return [header, ...rows].join('\n');
+    }
+
+    function generateRawCSV() {
+      const header = 'timestamp_ms,scroll_top,speed_px_s,z_score,stop_density,mean_speed,state';
+      const rows = state.csvData.map(d => 
+        `${d.timestamp.toFixed(0)},${d.scrollTop},${d.speed},${d.zScore},${d.stopDensity},${d.meanSpeed},${d.state}`
+      );
+      return [header, ...rows].join('\n');
+    }
+
+    function downloadCSV() {
+      const segmentsCSV = generateSegmentsCSV();
+      const rawCSV = generateRawCSV();
+
+      // Download segments CSV
+      const segmentsBlob = new Blob([segmentsCSV], { type: 'text/csv' });
+      const segmentsUrl = URL.createObjectURL(segmentsBlob);
+      const segmentsLink = document.createElement('a');
+      segmentsLink.href = segmentsUrl;
+      segmentsLink.download = `behavior_segments_${Date.now()}.csv`;
+      segmentsLink.click();
+
+      // Download raw data CSV
+      setTimeout(() => {
+        const rawBlob = new Blob([rawCSV], { type: 'text/csv' });
+        const rawUrl = URL.createObjectURL(rawBlob);
+        const rawLink = document.createElement('a');
+        rawLink.href = rawUrl;
+        rawLink.download = `behavior_raw_data_${Date.now()}.csv`;
+        rawLink.click();
+      }, 500);
+    }
+
+    // ============================================
+    // Event Listeners
+    // ============================================
+    elements.btnRecord.addEventListener('click', () => {
+      if (state.isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+
+    elements.btnAnnotate.addEventListener('click', startAnnotation);
+    elements.btnExportCSV.addEventListener('click', showSummary);
+
+    // Annotation options
+    elements.annotationOptions.addEventListener('click', (e) => {
+      const option = e.target.closest('.annotation-option');
+      if (option) {
+        selectAnnotation(option.dataset.value);
+      }
+    });
+
+    elements.btnConfirm.addEventListener('click', confirmAnnotation);
+    elements.btnSkip.addEventListener('click', skipAnnotation);
+    elements.closeModal.addEventListener('click', () => {
+      elements.annotationModal.classList.remove('active');
+      renderSegmentsList();
+    });
+
+    // Summary modal
+    elements.btnDownloadCSV.addEventListener('click', downloadCSV);
+    elements.btnCloseSummary.addEventListener('click', () => {
+      elements.summaryModal.classList.remove('active');
+    });
+    elements.closeSummaryModal.addEventListener('click', () => {
+      elements.summaryModal.classList.remove('active');
+    });
+
+    // Timeline click to seek
+    elements.timelineTrack.addEventListener('click', (e) => {
+      if (!elements.videoPlayer.src) return;
+      const rect = elements.timelineTrack.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      const time = percent * state.recordDuration;
+      elements.videoPlayer.currentTime = time;
+    });
+
+    // Video time update
+    elements.videoPlayer.addEventListener('timeupdate', () => {
+      if (!state.isRecording && elements.videoPlayer.src) {
+        const percent = (elements.videoPlayer.currentTime / state.recordDuration) * 100;
+        elements.playhead.style.left = `${percent}%`;
+      }
+    });
+
+    // Initialize
+    console.log('🎬 行為指紋錄製系統已載入');
+  </script>
+</body>
+</html>

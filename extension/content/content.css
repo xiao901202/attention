@@ -1,0 +1,325 @@
+/**
+ * Floating Indicator Styles
+ * Minimal, non-intrusive overlay for scroll state feedback
+ */
+
+#behavior-analysis-indicator {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  pointer-events: none;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+#behavior-analysis-indicator.warning {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+
+.bae-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 24px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 
+    0 4px 24px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  transition: all 0.3s ease;
+}
+
+/* State: IDLE */
+.bae-inner.state-IDLE {
+  background: rgba(84, 110, 122, 0.85);
+}
+
+.bae-inner.state-IDLE .bae-icon {
+  background: #78909c;
+}
+
+/* State: READING_FLOW */
+.bae-inner.state-READING_FLOW {
+  background: rgba(0, 150, 136, 0.9);
+  box-shadow: 
+    0 4px 24px rgba(0, 150, 136, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+
+.bae-inner.state-READING_FLOW .bae-icon {
+  background: #4db6ac;
+  box-shadow: 0 0 12px rgba(77, 182, 172, 0.6);
+}
+
+/* State: SCANNING_ZOMBIE */
+.bae-inner.state-SCANNING_ZOMBIE {
+  background: rgba(244, 67, 54, 0.92);
+  box-shadow: 
+    0 4px 24px rgba(244, 67, 54, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+
+.bae-inner.state-SCANNING_ZOMBIE .bae-icon {
+  background: #ff8a80;
+  box-shadow: 0 0 12px rgba(255, 138, 128, 0.6);
+  animation: pulse-icon 1s infinite;
+}
+
+@keyframes pulse-icon {
+  0%, 100% { 
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% { 
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+/* State: NAVIGATING */
+.bae-inner.state-NAVIGATING {
+  background: rgba(255, 193, 7, 0.88);
+}
+
+.bae-inner.state-NAVIGATING .bae-icon {
+  background: #ffd54f;
+}
+
+.bae-inner.state-NAVIGATING .bae-label {
+  color: #333;
+}
+
+/* Icon */
+.bae-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+/* Label */
+.bae-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: white;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+ * Recording Control Bubble — appears in every page during recording.
+ * Has pause/resume + stop buttons. NEVER shows a timer.
+ * ============================================ */
+#behavior-record-bubble {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
+  cursor: grab;
+}
+
+#behavior-record-bubble.dragging {
+  cursor: grabbing;
+}
+
+#behavior-record-bubble .brb-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 28px;
+  background: rgba(220, 38, 38, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    0 8px 32px rgba(220, 38, 38, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+  color: #fff;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+#behavior-record-bubble.paused .brb-inner {
+  background: rgba(245, 158, 11, 0.95);
+  box-shadow:
+    0 8px 32px rgba(245, 158, 11, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+
+#behavior-record-bubble .brb-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.85);
+  animation: brb-pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+#behavior-record-bubble.paused .brb-dot {
+  animation: none;
+  opacity: 0.85;
+}
+
+@keyframes brb-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(0.6); opacity: 0.55; }
+}
+
+#behavior-record-bubble .brb-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+#behavior-record-bubble .brb-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.1s ease;
+  padding: 0;
+  font-family: inherit;
+  line-height: 1;
+}
+
+#behavior-record-bubble .brb-btn:hover {
+  background: rgba(255, 255, 255, 0.32);
+  transform: scale(1.07);
+}
+
+#behavior-record-bubble .brb-btn:active {
+  transform: scale(0.95);
+}
+
+#behavior-record-bubble .brb-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  pointer-events: none;
+}
+
+/* ============================================
+ * Annotation Reminder Bubble — appears in active page after recording ends.
+ * ============================================ */
+#behavior-annotation-reminder {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  animation: bar-slide-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes bar-slide-in {
+  from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+#behavior-annotation-reminder .bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 18px;
+  border-radius: 18px;
+  background: rgba(99, 102, 241, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 12px 40px rgba(99, 102, 241, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  color: #fff;
+  max-width: 360px;
+}
+
+#behavior-annotation-reminder .bar-emoji {
+  font-size: 24px;
+  flex-shrink: 0;
+  animation: bar-bounce 1.2s ease-in-out infinite;
+}
+
+@keyframes bar-bounce {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+#behavior-annotation-reminder .bar-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+#behavior-annotation-reminder .bar-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+#behavior-annotation-reminder .bar-sub {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+#behavior-annotation-reminder .bar-go {
+  border: none;
+  border-radius: 12px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+#behavior-annotation-reminder .bar-go:hover {
+  background: #fff;
+  transform: scale(1.04);
+}
+
+#behavior-annotation-reminder .bar-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+#behavior-annotation-reminder .bar-close:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
