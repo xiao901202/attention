@@ -96,6 +96,29 @@
     });
     return all.filter(el => !all.some(parent => parent !== el && parent.contains(el)));
   }
+  // Where this viewport sits inside the captured screen, so a frame of the
+  // recording can be cropped to the post column without anyone drawing a box.
+  // Sent only when it changes: moving or resizing the window, or changing zoom,
+  // invalidates any crop derived earlier, and a single calibration would go
+  // silently stale.
+  let lastGeometry = null;
+  function geometry() {
+    const border = Math.max(0, (outerWidth - innerWidth) / 2);
+    return {
+      viewport_x: Math.round(screenX + border),
+      viewport_y: Math.round(screenY + (outerHeight - innerHeight - border)),
+      viewport_width: innerWidth, viewport_height: innerHeight,
+      device_pixel_ratio: devicePixelRatio,
+      screen_width: screen.width, screen_height: screen.height,
+    };
+  }
+  function geometryIfChanged() {
+    const next = geometry();
+    const key = JSON.stringify(next);
+    if (key === lastGeometry) return null;
+    lastGeometry = key;
+    return next;
+  }
   let selectionReason = 'not_sampled';
   function select() {
     if (document.visibilityState !== 'visible') { selectionReason = 'document_hidden'; return null; }
@@ -121,13 +144,17 @@
     pending = false; if (!recordingId) return;
     if (performance.now() - lastSample < 150) return;
     lastSample = performance.now();
-    current = select(); send({ type: 'POST_SAMPLE', post: current?.post || null, selection_reason: selectionReason });
+    current = select();
+    const changed = geometryIfChanged();
+    send({ type: 'POST_SAMPLE', post: current?.post || null, selection_reason: selectionReason,
+      ...(changed ? { geometry: changed } : {}) });
   }
   function schedule() { if (!pending && recordingId) { pending = true; requestAnimationFrame(sample); } }
   async function sync() {
     try {
       const c = await chrome.runtime.sendMessage({ type: 'POST_CONTEXT', document_id: documentId });
       recordingId = c?.recording_id || null;
+      if (!recordingId) lastGeometry = null;
       if (typeof c?.identity_salt === 'string' && c.identity_salt) identitySalt = c.identity_salt;
       clearInterval(timer); timer = recordingId ? setInterval(sample, 250) : null;
       if (recordingId) sample();

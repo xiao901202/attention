@@ -14,6 +14,9 @@ class PostTimeline {
       selection: 'largest viewport-clipped area; center hit-test; minimum 150x80 CSS pixels',
       heartbeat_ms: 250, maximum_tail_ms: 750, posts: {}, encounters: [],
       link_events: [], external_visits: [], mouse_samples: [], dropped_mouse_samples: 0,
+      // Viewport position and scale over time. A crop derived from one of these
+      // is only valid until the next entry.
+      geometry: [],
       diagnostics: { schema_version: 1, context_requests: 0, received: {}, rejected: {},
         accepted_samples: 0, selected_samples: 0, selection_reasons: {},
         focus_sync: { version: 1, checks: 0, focused_checks: 0, unfocused_checks: 0,
@@ -258,6 +261,9 @@ function installPostTracking(context) {
     if (!fb(tabURLs.get(sender.tab.id))) { reject('navigated_away'); return; }
     if (m.type === 'POST_SAMPLE') {
       diagnostic.accepted_samples++;
+      if (m.geometry && timeline.data.geometry.length < 500) {
+        timeline.data.geometry.push({ t: now(), ...m.geometry });
+      }
       acceptedAt = now(); acceptedWall = Date.now();
       if (m.post) diagnostic.selected_samples++;
       const reason = ['selected', 'document_hidden', 'document_unfocused', 'outside_viewport_or_occluded', 'no_candidate'].includes(m.selection_reason)
