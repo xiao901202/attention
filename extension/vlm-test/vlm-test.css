@@ -17,7 +17,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: 'Noto Sans TC', sans-serif;
+  font-family: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', system-ui, -apple-system, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
@@ -89,7 +89,7 @@ body {
   padding: 10px 14px;
   color: var(--text-primary);
   font-size: 13px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
   outline: none;
   transition: border-color 0.2s;
   resize: vertical;
@@ -151,7 +151,7 @@ body {
 .toggle-hint {
   font-size: 11px;
   color: var(--text-muted);
-  font-family: 'Noto Sans TC', sans-serif;
+  font-family: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', system-ui, -apple-system, sans-serif;
 }
 
 /* Upload Section */
@@ -218,7 +218,7 @@ body {
 .video-info {
   padding: 10px 16px;
   background: var(--bg-secondary);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -373,7 +373,7 @@ body {
 }
 
 .result-time {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
   font-size: 12px;
   color: var(--accent-primary);
   margin-bottom: 8px;
@@ -386,7 +386,7 @@ body {
   border-radius: 4px;
   font-size: 11px;
   color: var(--accent-primary);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
   margin-bottom: 10px;
 }
 
@@ -436,7 +436,7 @@ body {
 }
 
 .compare-time {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
   font-size: 14px;
   font-weight: 500;
 }
@@ -493,7 +493,7 @@ body {
 
 .lightbox-caption {
   margin-top: 14px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
   font-size: 14px;
   color: var(--text-secondary);
   background: var(--bg-secondary);

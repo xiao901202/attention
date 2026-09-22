@@ -905,7 +905,9 @@
         // Promoted to active tab — open a fresh segment at the current elapsed.
         if (isRecording && !isRecordingPaused && !isTabActive) {
           isTabActive = true;
-          currentSegmentStart = getRecordingElapsed();
+          // Prefer the boundary the background stamped, so this segment starts
+          // exactly where the outgoing tab's segment ends.
+          currentSegmentStart = typeof message.at === 'number' ? message.at : getRecordingElapsed();
           currentSegmentState = engine.getState();
           segmentClickCount = 0;
           console.log('[BehaviorEngine] Tab activated mid-recording, new segment from', currentSegmentStart);
@@ -919,7 +921,10 @@
         // Demoted to background — finalize the current segment so it doesn't
         // overlap with whatever the next active tab will open.
         if (isRecording && !isRecordingPaused && isTabActive && currentSegmentStart !== null) {
-          const elapsed = getRecordingElapsed();
+          // Close on the background's stamped boundary, not this tab's own
+          // clock: by now this tab is losing focus and being throttled, so its
+          // reading would land after the next tab already opened its segment.
+          const elapsed = typeof message.at === 'number' ? message.at : getRecordingElapsed();
           const segmentDuration = elapsed - currentSegmentStart;
           if (segmentDuration >= MIN_SEGMENT_DURATION_MS) {
             safeSendMessage({

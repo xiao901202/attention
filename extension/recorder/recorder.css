@@ -17,7 +17,7 @@
 }
 
 body {
-  font-family: 'Noto Sans TC', sans-serif;
+  font-family: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', system-ui, -apple-system, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
@@ -196,7 +196,7 @@ body {
   right: 8px;
   background: rgba(0, 0, 0, 0.75);
   color: var(--accent-success);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
   font-size: 12px;
   padding: 4px 10px;
   border-radius: 6px;
@@ -280,7 +280,7 @@ body {
 }
 
 .recording-timer {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
   font-size: 24px;
   font-weight: 600;
 }
@@ -358,7 +358,7 @@ body {
 }
 
 .metric-value {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, 'Courier New', monospace;
   font-size: 18px;
   font-weight: 600;
 }

@@ -9,7 +9,7 @@ const writes = [];
 const event = name => ({ addListener: callback => { listeners[name] = callback; } });
 const chrome = {
   runtime: { onMessage: event('message'), onInstalled: event('installed') },
-  tabs: { onActivated: event('activated'), onRemoved: event('removed'), onUpdated: event('updated') },
+  tabs: { onActivated: event('activated'), onRemoved: event('removed'), onUpdated: event('updated'), onCreated: event('created') },
   windows: { onFocusChanged: event('focus') },
   action: { setBadgeText() {}, setBadgeBackgroundColor() {} },
   storage: {
@@ -17,7 +17,9 @@ const chrome = {
     sync: { set: values => writes.push({ store: 'sync', values }) },
   },
 };
-vm.runInNewContext(fs.readFileSync('extension/background/background.js', 'utf8'), { chrome, console: { log() {} } });
+const context = vm.createContext({ chrome, console: { log() {} } });
+context.importScripts = file => vm.runInContext(fs.readFileSync(path.join('extension/background', file), 'utf8'), context);
+vm.runInContext(fs.readFileSync('extension/background/background.js', 'utf8'), context);
 const results = [];
 for (const reason of ['update', 'chrome_update']) {
   listeners.installed({ reason, previousVersion: '3.0.0' });

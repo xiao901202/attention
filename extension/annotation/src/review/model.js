@@ -26,6 +26,7 @@ export function createReview(source, instrument) {
     segments: source.segments,
     scrollData: source.scrollData || [],
     mouseData: source.mouseData || [],
+    postTracking: source.postTracking || null,
     cropRect: source.cropRect || null,
     duration: source.duration,
     sampling: { method: 'legacy_reading_candidate', minimum_segment_ms: 2000, includes_non_candidates: false },
@@ -37,7 +38,7 @@ export function createReview(source, instrument) {
 }
 
 export function isAnswer(answer) {
-  return !!answer && ((Number.isInteger(answer.value) && answer.value >= 1 && answer.value <= 7 && answer.missing_reason === null)
+  return !!answer && ((Number.isInteger(answer.value) && answer.value >= 1 && answer.value <= INSTRUMENT.scale_points && answer.missing_reason === null)
     || (answer.value === null && ['cannot_recall', 'not_applicable', 'prefer_not_to_answer'].includes(answer.missing_reason)));
 }
 
@@ -85,7 +86,20 @@ export function nextSegment(session) {
     : { ...session.cursor, stage: 'done' } };
 }
 
+// A permalink names the account that authored the post, which is a third party
+// who never consented to this study. The reviewer's own copy keeps it so they
+// can reopen their post; the export is where data leaves the machine, so the
+// raw URL is dropped there. The salted fingerprint in `id` still identifies the
+// post across encounters and sessions.
+function redactPermalinks(postTracking) {
+  if (!postTracking?.posts) return postTracking || null;
+  const posts = Object.fromEntries(Object.entries(postTracking.posts)
+    .map(([key, post]) => [key, { ...post, permalink: null }]));
+  return { ...postTracking, posts };
+}
+
 export function exportReview(session) {
-  return { ...session, exported_at: new Date().toISOString(), media_included: false,
-    legacy_quadrant_scoring_applied: false };
+  return { ...session, postTracking: redactPermalinks(session.postTracking),
+    exported_at: new Date().toISOString(), media_included: false,
+    permalinks_redacted: true, legacy_quadrant_scoring_applied: false };
 }

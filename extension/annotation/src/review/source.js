@@ -24,7 +24,7 @@ export async function loadSource() {
   if (params.get('demo') === '1') return demoSource();
   if (!globalThis.chrome?.storage?.local) return null;
   const data = await chrome.storage.local.get(['currentRecordingId', 'hasRecordingData', 'recordingSegments',
-    'recordingData', 'recordingMouseData', 'recordingActualDuration', 'recordingDuration', 'recordingCropRect']);
+    'recordingData', 'recordingMouseData', 'recordingActualDuration', 'recordingDuration', 'recordingCropRect', 'recordingPostTracking']);
   if (!data.hasRecordingData || !data.currentRecordingId) return null;
   const recording = await getRecording(data.currentRecordingId);
   return {
@@ -32,5 +32,6 @@ export async function loadSource() {
     segments: data.recordingSegments || [], scrollData: data.recordingData || [],
     mouseData: data.recordingMouseData || [], duration: data.recordingActualDuration || data.recordingDuration || 0,
     cropRect: data.recordingCropRect || null, videoBlob: recording?.videoBlob || null,
+    postTracking: data.recordingPostTracking?.recording_id === data.currentRecordingId ? data.recordingPostTracking : null,
   };
 }

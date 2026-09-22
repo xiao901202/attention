@@ -28,7 +28,7 @@ function Choices({ legend, options, value, onChange, name }) {
 export function answerText(item, answer) {
   if (!answer) return '尚未回答';
   if (answer.value === null) return MISSING_REASONS[answer.missing_reason];
-  return `${answer.value} / 7${answer.value === 1 ? ` · ${item.low}` : answer.value === 7 ? ` · ${item.high}` : ''}`;
+  return `${answer.value} / ${INSTRUMENT.scale_points}${answer.value === 1 ? ` · ${item.low}` : answer.value === INSTRUMENT.scale_points ? ` · ${item.high}` : ''}`;
 }
 
 export function GatePanel({ title, draft, changeDraft, proceed }) {
@@ -46,9 +46,9 @@ export function QuestionPanel({ title, itemIndex, draft, setAnswer, navigate }) 
     <progress className="item-progress" aria-label="本段題目位置" value={itemIndex + 1} max={INSTRUMENT.items.length}/>
     <div className="reference-prompt">{itemIndex < 4 ? INSTRUMENT.x_prompt : INSTRUMENT.y_prompt}</div>
     {title(item.text)}
-    <fieldset className="rating-field"><legend className="sr-only">{item.low}至{item.high}，七點量尺</legend>
-      <div className="scale-endpoints"><span>1 · {item.low}</span><span>7 · {item.high}</span></div>
-      <div className="rating-options">{Array.from({ length: 7 }, (_, i) => i + 1).map(value => <label key={value} className={`rating-option ${answer?.value === value ? 'selected' : ''}`}><input type="radio" name={`answer-${item.id}`} checked={answer?.value === value} onChange={() => setAnswer(item.id, value)} aria-label={`${value}${value === 1 ? `，${item.low}` : value === 7 ? `，${item.high}` : ''}`}/><span>{value}</span><span className="rating-dot" aria-hidden="true"/></label>)}</div>
+    <fieldset className="rating-field"><legend className="sr-only">{item.low}至{item.high}，{INSTRUMENT.scale_points}點量尺</legend>
+      <div className="scale-endpoints"><span>1 · {item.low}</span><span>{INSTRUMENT.scale_points} · {item.high}</span></div>
+      <div className="rating-options" style={{ gridTemplateColumns: `repeat(${INSTRUMENT.scale_points}, minmax(0, 1fr))` }}>{Array.from({ length: INSTRUMENT.scale_points }, (_, i) => i + 1).map(value => <label key={value} className={`rating-option ${answer?.value === value ? 'selected' : ''}`}><input type="radio" name={`answer-${item.id}`} checked={answer?.value === value} onChange={() => setAnswer(item.id, value)} aria-label={`${value}${value === 1 ? `，${item.low}` : value === INSTRUMENT.scale_points ? `，${item.high}` : ''}`}/><span>{value}</span><span className="rating-dot" aria-hidden="true"/></label>)}</div>
     </fieldset>
     <p className="selection-summary" role="status">{answer ? `已選：${answerText(item, answer)}` : '請選擇最符合的程度。選取後不會自動前進。'}</p>
     <fieldset className="missing-field"><legend>如果無法評分</legend><div className="missing-options">{Object.entries(MISSING_REASONS).map(([key, label]) => <label key={key} className={answer?.missing_reason === key ? 'selected' : ''}><input type="radio" name={`answer-${item.id}`} checked={answer?.missing_reason === key} onChange={() => setAnswer(item.id, null, key)}/><span>{label}</span></label>)}</div></fieldset>

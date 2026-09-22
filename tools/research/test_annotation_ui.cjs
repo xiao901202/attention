@@ -81,6 +81,9 @@ async function failWrites(page, enabled) {
   await page.getByRole('button', { name: /開始回答/ }).click();
   await check('Selecting an answer does not auto-advance', async () => {
     assert.equal(await page.locator('h1').innerText(), expectedItems[0].text);
+    // The rendered scale and the declared scale drifted apart once already:
+    // scale_points said 7 while nothing read it. Pin the rendered count here.
+    assert.equal(await page.locator('.rating-option').count(), 5);
     await page.getByRole('radio', { name: '3', exact: true }).check();
     await page.waitForTimeout(400);
     assert.match(await page.locator('.question-step').innerText(), /第 1 \/ 8 題/);
@@ -93,7 +96,7 @@ async function failWrites(page, enabled) {
   });
   await next(page);
   await check('Question navigation moves focus to the heading', async () => { assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'H1'); });
-  await page.getByRole('radio', { name: '5', exact: true }).check();
+  await page.getByRole('radio', { name: '2', exact: true }).check();
   await page.getByRole('button', { name: '上一題' }).click();
   await check('Back navigation preserves the original answer', async () => { assert(await page.getByRole('radio', { name: '3', exact: true }).isChecked()); });
 
@@ -126,17 +129,17 @@ async function failWrites(page, enabled) {
     await page.evaluate(() => new Promise(resolve => {
       const open = indexedDB.open('AttentionQuadrantDB'); open.onsuccess = () => {
         const db = open.result; const tx = db.transaction('reviewSessions', 'readwrite'); const store = tx.objectStore('reviewSessions');
-        const read = store.getAll(); read.onsuccess = () => { const s = read.result[0]; s.revision += 10; s.drafts[0].answers.X08.value = 7; store.put(s); };
+        const read = store.getAll(); read.onsuccess = () => { const s = read.result[0]; s.revision += 10; s.drafts[0].answers.X08.value = 5; store.put(s); };
         tx.oncomplete = () => { db.close(); resolve(); };
       };
     }));
-    await page.getByRole('radio', { name: '5', exact: true }).check();
+    await page.getByRole('radio', { name: '2', exact: true }).check();
     await page.getByRole('button', { name: '重試儲存' }).waitFor();
     await page.getByRole('button', { name: '重試儲存' }).click();
     await page.locator('.save-indicator.error').waitFor();
-    assert.equal((await dbRead(page))[0].drafts[0].answers.X08.value, 7);
-    await page.reload(); await page.getByRole('radio', { name: '7，了解得很多', exact: true }).waitFor();
-    assert(await page.getByRole('radio', { name: '7，了解得很多', exact: true }).isChecked());
+    assert.equal((await dbRead(page))[0].drafts[0].answers.X08.value, 5);
+    await page.reload(); await page.getByRole('radio', { name: '5，了解得很多', exact: true }).waitFor();
+    assert(await page.getByRole('radio', { name: '5，了解得很多', exact: true }).isChecked());
     await page.getByRole('radio', { name: '4', exact: true }).check(); await saved(page);
   });
   await next(page); await next(page);
@@ -182,8 +185,11 @@ async function failWrites(page, enabled) {
   });
   await check('All eight fixed items and X endpoints match the discussion PPT draft', async () => {
     const s = (await dbRead(page))[0];
-    assert.equal(s.instrument.version, 'draft-20260909.2');
-    assert.equal(s.ui_version, 'review-ui-20260909.2');
+    assert.equal(s.instrument.version, 'draft-20260922.1');
+    assert.equal(s.ui_version, 'review-ui-20260922.1');
+    // The rendered scale and the declared scale drifted apart once already:
+    // scale_points said 7 while nothing read it. Pin both together.
+    assert.equal(s.instrument.scale_points, 5);
     assert.equal(expectedItems.length, 8);
     for (const expected of expectedItems) {
       const actual = s.instrument.items.find(item => item.id === expected.id);
@@ -229,6 +235,26 @@ async function failWrites(page, enabled) {
     assert.equal((await dbRead(page))[0].cursor.stage, 'done');
   });
   await screenshot(page, '07-completion');
+  // A permalink names the author of a post, who is a third party to the study.
+  // Plant one in the stored session so the export boundary is actually tested.
+  await page.evaluate(() => new Promise(resolve => {
+    const open = indexedDB.open('AttentionQuadrantDB');
+    open.onsuccess = () => {
+      const db = open.result; const tx = db.transaction('reviewSessions', 'readwrite');
+      const store = tx.objectStore('reviewSessions'); const read = store.getAll();
+      read.onsuccess = () => {
+        const session = read.result[0];
+        session.postTracking = { schema_version: 3, posts: {
+          'permalink:abcdef0123456789': { id: 'permalink:abcdef0123456789',
+            permalink: 'https://www.facebook.com/some-account-handle/posts/123',
+            permalink_form: 'user_posts', identity_quality: 'permalink' } },
+          encounters: [], link_events: [], external_visits: [], mouse_samples: [] };
+        store.put(session);
+      };
+      tx.oncomplete = () => { db.close(); resolve(); };
+    };
+  }));
+  await page.reload(); await page.getByRole('button', { name: '下載本次紀錄' }).waitFor();
   await check('Completion and JSON export match persisted records', async () => {
     const event = page.waitForEvent('download'); await page.getByRole('button', { name: '下載本次紀錄' }).click();
     const file = await event; const filePath = path.join(out, 'demo-export.json'); await file.saveAs(filePath);
@@ -236,6 +262,12 @@ async function failWrites(page, enabled) {
     assert.equal(Object.keys(data.annotations).length, 3);
     assert.equal(data.legacy_quadrant_scoring_applied, false);
     assert.equal(data.annotations[2].reason, 'cannot_recall');
+    // The reviewer's own copy keeps the permalink; the export must not.
+    assert.equal(data.permalinks_redacted, true);
+    const exported = Object.values(data.postTracking.posts)[0];
+    assert.equal(exported.permalink, null, 'export must not carry the author account');
+    assert.equal(exported.id, 'permalink:abcdef0123456789', 'the fingerprint identity survives');
+    assert(!JSON.stringify(data).includes('some-account-handle'), 'no account handle anywhere in the export');
   });
   await page.getByRole('button', { name: '查看本機紀錄' }).click();
   await page.locator('.history-panel').waitFor();

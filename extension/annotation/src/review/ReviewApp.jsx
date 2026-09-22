@@ -4,7 +4,10 @@ import { completeSegment, createReview, emptyDraft, exportReview, withAnswer } f
 import { loadSource } from './source';
 import { getAllAnnotations, getAllReviewSessions, getAllSessions, getRecording, getReviewSession } from '../store';
 import ReviewMedia from './ReviewMedia';
+import PostSummary from './PostSummary';
 import useReviewSession from './useReviewSession';
+import useLatestRecording from './useLatestRecording';
+import { recordingLabel, reviewFilename } from './recordingIdentity';
 import { CheckPanel, GatePanel, House, QuestionPanel } from './ReviewPanels';
 
 const SAVE_LABELS = { idle: '尚未開始', saving: '儲存中…', saved: '已儲存在本機', error: '尚未儲存成功' };
@@ -17,6 +20,7 @@ function download(name, value) {
 export default function ReviewApp() {
   const { session, initialize, update, saveState, saveError, retry, commitPending, latest } = useReviewSession();
   const [source, setSource] = useState(null);
+  const latestRecording = useLatestRecording();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [history, setHistory] = useState(null);
@@ -83,7 +87,14 @@ export default function ReviewApp() {
     } catch (error) { setHistoryError(error.message); }
     finally { setHistoryLoading(false); }
   }
-  function exportCurrent() { download(`review_${source.demo ? 'demo_' : ''}${new Date().toISOString().slice(0, 10)}.json`, { ...exportReview(latest()), local_save_state: saveState }); }
+  function exportCurrent() { const current = latest(); download(reviewFilename(current), { ...exportReview(current), local_save_state: saveState }); }
+  function openLatestRecording() {
+    if (!latestRecording?.ready || (session && !safeToLeave && saveState !== 'idle')) return;
+    const url = new URL(location.href);
+    url.searchParams.delete('review'); url.searchParams.delete('demo');
+    // Explicit navigation only; never replace an in-progress review on a storage event.
+    location.assign(url.href);
+  }
   async function resumeReview(record) {
     setHistoryLoading(true); setHistoryError('');
     try {
@@ -109,16 +120,23 @@ export default function ReviewApp() {
         <button className="text-button" onClick={showHistory} disabled={historyLoading || saveState === 'saving' || saveState === 'error'}>{historyLoading ? '載入紀錄…' : '本機紀錄'}</button></div>
     </header>
     <div className="review-context"><span className="draft-badge">{source?.demo ? '操作示例' : '題本審閱版'}</span><span>固定題目草案，尚待研究審查</span>
+      {session && !source?.demo && <span className="recording-identity">目前錄製：{recordingLabel(session.recording_id)} · {Math.round((session.duration || 0) / 1000)} 秒</span>}
       {session && <span className={`save-indicator ${saveState}`} role="status" aria-live="polite"><span aria-hidden="true">{saveState === 'saved' ? '✓' : saveState === 'error' ? '!' : '·'}</span> {SAVE_LABELS[saveState]}</span>}
     </div>
     {saveState === 'error' && <div className="save-error" role="alert"><div><strong>這次變更還沒有儲存成功。</strong><p>{saveError} 請先留在此頁。</p></div><button ref={retryButton} className="button secondary" onClick={retry}>重試儲存</button><button className="text-button" onClick={exportCurrent}>下載目前草稿</button></div>}
     {historyError && <div className="inline-error" role="alert">{historyError}</div>}
     <main id="review-main" tabIndex={-1}>
+      {!loading && !source?.demo && latestRecording?.id && latestRecording.id !== session?.recording_id && <div className="instruction-note" role="status">
+        <strong>{latestRecording.ready ? '已有另一段錄製完成；此頁尚未切換。' : '另一段錄製尚未完成；此頁仍保留原紀錄。'}</strong>
+        <p>新錄製：{recordingLabel(latestRecording.id)}。下載按鈕只會下載目前顯示的紀錄。</p>
+        {latestRecording.ready && <button className="button secondary" onClick={openLatestRecording} disabled={!!session && !safeToLeave && saveState !== 'idle'}>開啟最新錄製</button>}
+        {session && !safeToLeave && saveState !== 'idle' && <p>請先完成目前變更的儲存，再切換紀錄。</p>}
+      </div>}
       {loading ? <section className="standalone-panel"><div className="loading-mark" aria-hidden="true"/>{title('正在載入本機資料')}<p role="status">準備錄製片段與固定題本…</p></section>
       : loadError && !history ? <section className="standalone-panel">{title('暫時無法載入')}<p role="alert">{loadError}</p><div className="action-row"><button className="button primary" onClick={() => location.reload()}>重新載入</button><button className="button secondary" onClick={() => { location.search = ''; }}>返回最新錄製資料</button></div></section>
       : history ? <section className="standalone-panel history-panel"><div className="eyebrow">這台裝置上的紀錄</div>{title('本機回顧紀錄')}<p>保留原始答案與題本版本。示例及審閱資料分別標示。</p>
         {!history.reviews.length && <p className="empty-history">目前還沒有新版回顧紀錄。</p>}
-        <div className="history-list">{history.reviews.map(s => <article key={s.session_id}><div><strong>{s.collection_mode === 'interface_demo' ? '操作示例' : '題本審閱'}</strong><p>{new Date(s.updated_at).toLocaleString('zh-TW')} · {Object.keys(s.annotations).length} / {s.candidates.length} 段<br/>題本 {s.instrument.version}{s.instrument.version !== INSTRUMENT.version ? ' · 舊版答案保留，可下載原始紀錄' : ''}</p></div><div className="history-actions"><button className="text-button" disabled={historyLoading || s.instrument.version !== INSTRUMENT.version} onClick={() => resumeReview(s)}>{s.instrument.version === INSTRUMENT.version ? '開啟紀錄' : '舊版題本'}</button><button className="button secondary" onClick={() => download(`review_${s.instrument.version}_${s.updated_at.slice(0, 10)}.json`, exportReview(s))}>下載紀錄</button></div></article>)}</div>
+        <div className="history-list">{history.reviews.map(s => <article key={s.session_id}><div><strong>{s.collection_mode === 'interface_demo' ? '操作示例' : '題本審閱'}</strong><p>錄製：{recordingLabel(s.recording_id)}<br/>回顧更新：{new Date(s.updated_at).toLocaleString('zh-TW')} · {Object.keys(s.annotations).length} / {s.candidates.length} 段<br/>題本 {s.instrument.version}{s.instrument.version !== INSTRUMENT.version ? ' · 舊版答案保留，可下載原始紀錄' : ''}</p></div><div className="history-actions"><button className="text-button" disabled={historyLoading || s.instrument.version !== INSTRUMENT.version} onClick={() => resumeReview(s)}>{s.instrument.version === INSTRUMENT.version ? '開啟紀錄' : '舊版題本'}</button><button className="button secondary" onClick={() => download(reviewFilename(s), exportReview(s))}>下載紀錄</button></div></article>)}</div>
         {history.legacyCount > 0 && <div className="legacy-note"><p>另有 {history.legacyCount} 筆舊版紀錄，原資料已保留。</p><button className="text-button" onClick={async () => { try { const [sessions, annotations] = await Promise.all([getAllSessions(), getAllAnnotations()]); download('legacy_annotation_backup.json', { kind: 'legacy-backup', sessions, annotations }); } catch (e) { setHistoryError(e.message); } }}>下載舊版備份</button></div>}
         <button className="button primary" onClick={() => setHistory(null)}>返回回顧</button>
       </section>
@@ -138,6 +156,7 @@ export default function ReviewApp() {
         {title(safeToLeave ? '本次回顧已完成。' : '正在保存本次回顧。')}
         <p>{!session.candidates.length ? '這次沒有符合目前候選規則的片段。原始紀錄仍可下載；這不代表沒有閱讀。' : '所有片段都已處理。你可以查看或下載這次的紀錄。'}</p>
         <div className="completion-stats"><div><strong>{answered}</strong><span>已回答片段</span></div><div><strong>{skipped}</strong><span>已略過片段</span></div><div><strong>{Math.max(0, session.candidates.length - completed)}</strong><span>尚待回顧</span></div></div>
+        <PostSummary data={session.postTracking}/>
         <div className="action-row centered"><button className="button secondary" disabled={!safeToLeave} onClick={showHistory}>查看本機紀錄</button><button className="button primary" disabled={!safeToLeave} onClick={exportCurrent}>下載本次紀錄</button></div>
         <p className="caption">{SAVE_LABELS[saveState]} · {source.demo ? '操作示例' : '審閱草案資料'}，不計算舊版象限分數</p>
       </section>

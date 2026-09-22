@@ -3,6 +3,8 @@
  * Handles badge updates, cross-tab communication, and recording state management
  */
 
+importScripts('post-tracking.js');
+
 // Badge colors for different states
 const BADGE_COLORS = {
   'IDLE': '#8b949e',
@@ -38,6 +40,19 @@ let recordingState = {
 // the timeline stays continuous across pages.
 let activeTabId = null;
 
+// A tab that has just lost focus still owes us the segment it closes in
+// response to TAB_DEACTIVATED. activeTabId has already moved on by the time
+// that message arrives, so without this window the outgoing tab's final
+// segment fails the fromActiveTab check and is silently discarded.
+let handoffTabId = null;
+let handoffUntil = 0;
+const HANDOFF_GRACE_MS = 2000;
+
+function openHandoffWindow(tabId) {
+  handoffTabId = tabId;
+  handoffUntil = Date.now() + HANDOFF_GRACE_MS;
+}
+
 // Effective elapsed time (excludes paused intervals)
 function getEffectiveElapsed() {
   if (!recordingState.startTime) return 0;
@@ -51,7 +66,19 @@ function getEffectiveElapsed() {
 
 const MIN_SEGMENT_DURATION_MS = 1000; // Reduced to capture shorter segments
 const STREAMING_MIN_READING_MS = 2000;
+const postTracker = installPostTracking(() => ({
+  running: recordingState.isRecording, paused: recordingState.isPaused,
+  recordingId: recordingState.recordingId, activeTabId, elapsed: getEffectiveElapsed(),
+}));
 
+// Read-only diagnostic entry point for development and acceptance testing.
+// Also answers the POST_STATUS runtime message. It reports the collector's
+// own belief about foreground and its accepted-sample counters; it observes
+// nothing at the operating system level and must never appear in the
+// participant-facing review UI.
+function postTrackingStatus() {
+  return postTracker.status();
+}
 // Forward READING_FLOW segments to extension pages (recorder.js) for
 // streaming VLM pre-analysis while the recording is still in progress.
 function forwardStreamingSegment(segment) {
@@ -72,7 +99,14 @@ function forwardStreamingSegment(segment) {
 
 // Listen for messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // The post tracker owns these messages; do not leave a response port open
+  // for each heartbeat and mouse sample.
+  if (message.type?.startsWith('POST_')) return false;
   const fromActiveTab = !!sender.tab && sender.tab.id === activeTabId;
+  // Segments (and only segments) are also accepted from the tab we just handed
+  // focus away from, for as long as its handoff window is open.
+  const fromTimelineTab = fromActiveTab ||
+    (!!sender.tab && sender.tab.id === handoffTabId && Date.now() < handoffUntil);
 
   // State change from content script — used to update the per-tab badge and
   // to track the engine state of the focused tab. Segments themselves come
@@ -108,8 +142,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'STOP_RECORDING') {
-    stopRecording();
-    sendResponse({ success: true });
+    stopRecording().then(() => sendResponse({ success: true }),
+      error => sendResponse({ success: false, error: error.message }));
   }
 
   // Pause/resume requested from content-script bubble (running in any tab)
@@ -139,12 +173,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // Segment data from content script
-  // Accepted when (a) recording from the active tab, OR (b) within the brief
-  // post-stop grace window (so the active tab's final segment isn't dropped).
+  // Accepted when (a) recording and the sender still owns the timeline, OR
+  // (b) within the brief post-stop grace window (so the final segment isn't
+  // dropped). Deliberately NOT gated on isPaused: content.js closes its open
+  // segment *because* of the pause and sends it right after the background
+  // flips the flag, so an isPaused check would discard exactly the segment
+  // that pause handling exists to preserve. Content scripts already suppress
+  // ordinary state-change segments while paused.
   if (message.type === 'RECORD_SEGMENT') {
     const inGrace = !recordingState.isRecording && Date.now() < recordingState.acceptSegmentsUntil;
-    const allowedDuringRecording = recordingState.isRecording && !recordingState.isPaused && fromActiveTab;
-    if (message.segment && (allowedDuringRecording || (inGrace && fromActiveTab))) {
+    const allowedDuringRecording = recordingState.isRecording && fromTimelineTab;
+    if (message.segment && (allowedDuringRecording || (inGrace && fromTimelineTab))) {
       console.log('[Background] Received segment:', message.segment);
       recordingState.segments.push(message.segment);
       forwardStreamingSegment(message.segment);
@@ -174,21 +213,33 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   if (tabId === activeTabId) {
     activeTabId = null;
   }
+  if (tabId === handoffTabId) {
+    handoffTabId = null;
+    handoffUntil = 0;
+  }
 });
 
 function handleTabFocusChange(newTabId) {
   if (!newTabId || newTabId === activeTabId) return;
   const oldTabId = activeTabId;
   activeTabId = newTabId;
+  postTracker.activate(newTabId);
 
   if (!recordingState.isRecording) return;
 
   // Hand off cleanly: tell the previous tab to finalize its open segment,
   // then tell the new tab to open a fresh segment at the current elapsed.
+  // Stamp one boundary here and give it to both tabs. Letting each tab read
+  // its own clock lets the handoff cross over: the tab that just lost focus is
+  // already being throttled, so it closes its segment *after* the new tab has
+  // opened one, and the two overlap on a timeline that must be a single
+  // sequence.
+  const boundary = getEffectiveElapsed();
   if (oldTabId) {
-    chrome.tabs.sendMessage(oldTabId, { type: 'TAB_DEACTIVATED' }).catch(() => {});
+    openHandoffWindow(oldTabId);
+    chrome.tabs.sendMessage(oldTabId, { type: 'TAB_DEACTIVATED', at: boundary }).catch(() => {});
   }
-  chrome.tabs.sendMessage(newTabId, { type: 'TAB_ACTIVATED' }).catch(() => {});
+  chrome.tabs.sendMessage(newTabId, { type: 'TAB_ACTIVATED', at: boundary }).catch(() => {});
 }
 
 function togglePauseRecording() {
@@ -200,11 +251,13 @@ function togglePauseRecording() {
     }
     recordingState.pauseStartTime = null;
     recordingState.isPaused = false;
+    postTracker.resume();
     chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
     chrome.action.setBadgeText({ text: 'REC' });
     broadcastToAllTabs({ type: 'RECORDING_RESUMED' });
     chrome.runtime.sendMessage({ type: 'RECORDER_PAUSE_TOGGLE', paused: false }).catch(() => {});
   } else {
+    postTracker.boundary('recording_paused');
     recordingState.isPaused = true;
     recordingState.pauseStartTime = Date.now();
     chrome.action.setBadgeBackgroundColor({ color: '#f59e0b' });
@@ -321,14 +374,19 @@ async function startRecording(duration, recordingId) {
     mouseEventCount: 0,
     acceptSegmentsUntil: 0,
   };
+  handoffTabId = null;
+  handoffUntil = 0;
 
   // Save state
+  postTracker.start();
   await chrome.storage.local.set({
     isRecording: true,
     recordingPaused: false,
     recordingStartTime: recordingState.startTime,
     recordingDuration: duration,
     currentRecordingId: recordingId,
+    recordingPostTracking: null,
+    hasRecordingData: false,
   });
 
   // Set recording badge
@@ -379,10 +437,17 @@ function mergeAdjacentSegments(segments) {
   
   for (let i = 1; i < segments.length; i++) {
     const next = segments[i];
-    
-    // If same state and close in time (within 500ms gap), merge
-    if (next.state === current.state && (next.startTime - current.endTime) < 500) {
+
+    // Merge only a continuation of the *same page* in the same state. Without
+    // the url test, alternating tabs in the same state collapse into one
+    // segment carrying whichever url came first — so a stretch of tab
+    // switching is reported as a single long visit to the wrong page.
+    const sameState = next.state === current.state;
+    const samePage = next.url === current.url;
+    const contiguous = (next.startTime - current.endTime) < 500;
+    if (sameState && samePage && contiguous) {
       current.endTime = next.endTime;
+      current.clickCount = (current.clickCount || 0) + (next.clickCount || 0);
     } else {
       merged.push(current);
       current = { ...next };
@@ -400,7 +465,14 @@ function mergeAdjacentSegments(segments) {
 }
 
 // Stop recording
-async function stopRecording() {
+let recordingFinalization = Promise.resolve();
+function stopRecording() {
+  if (!recordingState.isRecording) return recordingFinalization;
+  recordingFinalization = finalizeRecording();
+  return recordingFinalization;
+}
+
+async function finalizeRecording() {
   if (!recordingState.isRecording) return;
 
   console.log('[Background] Stopping recording');
@@ -421,6 +493,7 @@ async function stopRecording() {
 
   // Open a short grace window so the active tab's RECORDING_STOPPED-triggered
   // final RECORD_SEGMENT message can still be accepted after we flip the flag.
+  const postTracking = postTracker.finish();
   recordingState.acceptSegmentsUntil = Date.now() + 600;
   recordingState.isRecording = false;
 
@@ -446,6 +519,7 @@ async function stopRecording() {
     recordingMouseData: recordingState.mouseData.slice(-20000),
     recordingDuration: recordingState.duration,
     recordingActualDuration: elapsed,
+    recordingPostTracking: postTracking,
   });
 
   console.log('[Background] Recording saved:', {

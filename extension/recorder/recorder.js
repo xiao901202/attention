@@ -37,8 +37,9 @@ async function saveRecording(id, data) {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const request = store.put({ id, ...data });
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = () => { db.close(); reject(tx.error || request.error || new Error('錄製儲存未完成')); };
+    tx.onerror = () => { /* onabort reports failed transactions */ };
   });
 }
 
@@ -790,6 +791,7 @@ function resumeRecording() {
   console.log('[Recorder] resumed');
 }
 
+let recordingDataSaved = null;
 function stopRecording() {
   if (!state.isRecording) return;
   state.isRecording = false;
@@ -802,7 +804,10 @@ function stopRecording() {
   // Stop streaming pipeline
   stopFrameGrabbing();
 
-  chrome.runtime.sendMessage({ type: 'STOP_RECORDING' });
+  // Background acknowledges only after timeline and post telemetry are durable.
+  // Keep transport errors as a value until processRecording can display them.
+  recordingDataSaved = chrome.runtime.sendMessage({ type: 'STOP_RECORDING' })
+    .catch(error => ({ success: false, error: error.message }));
 
   if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
     state.mediaRecorder.stop();
@@ -820,7 +825,8 @@ async function processRecording() {
     const videoBlob = new Blob(state.recordedChunks, { type: 'video/webm' });
     console.log('Video blob:', videoBlob.size, 'bytes');
 
-    const { currentRecordingId } = await chrome.storage.local.get(['currentRecordingId']);
+    const result = await recordingDataSaved;
+    const { currentRecordingId, recordingPostTracking } = await chrome.storage.local.get(['currentRecordingId', 'recordingPostTracking']);
 
     await saveRecording(currentRecordingId, {
       videoBlob,
@@ -828,9 +834,11 @@ async function processRecording() {
       actualDuration: Date.now() - state.recordingStartTime,
       timestamp: new Date().toISOString(),
       cropRect: state.cropRect || null,
+      postTracking: recordingPostTracking?.recording_id === currentRecordingId ? recordingPostTracking : null,
     });
 
     console.log('Video saved to IndexedDB (crop:', state.cropRect ? 'yes' : 'none', ')');
+    if (!result?.success) throw new Error(`影片已保存在本機，但行為紀錄未完成：${result?.error || '請保留此頁並重試儲存。'}`);
     await chrome.storage.local.set({ hasRecordingData: true });
 
     chrome.notifications.create('recording-complete', {
