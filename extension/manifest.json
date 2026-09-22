@@ -42,7 +42,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "annotation/*", "annotation/dist/*", "recorder/*", "vlm-test/*"],
+      "resources": ["icons/*", "annotation/*", "annotation/dist/*", "recorder/*"],
       "matches": ["<all_urls>"]
     }
   ]

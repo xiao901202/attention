@@ -223,14 +223,6 @@ btnAnnotate.addEventListener('click', () => {
   openAnnotationPage();
 });
 
-// VLM Test page
-const openVLMTest = document.getElementById('openVLMTest');
-if (openVLMTest) {
-  openVLMTest.addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('vlm-test/vlm-test.html') });
-    window.close();
-  });
-}
 
 // Start
 init();

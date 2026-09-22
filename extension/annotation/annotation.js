@@ -193,7 +193,6 @@ const elements = {
   btnExportCSV: document.getElementById('btnExportCSV'),
   btnNewRecording: document.getElementById('btnNewRecording'),
   btnDownloadVideo: document.getElementById('btnDownloadVideo'),
-  btnVLMTest: document.getElementById('btnVLMTest'),
   btnStartRecording: document.getElementById('btnStartRecording'),
   summaryModal: document.getElementById('summaryModal'),
   emptyState: document.getElementById('emptyState'),
@@ -1485,10 +1484,6 @@ elements.btnDownloadVideo.addEventListener('click', async () => {
     console.error('[Annotation] Download video error:', err);
     alert('下載失敗: ' + err.message);
   }
-});
-
-elements.btnVLMTest.addEventListener('click', () => {
-  window.open(chrome.runtime.getURL('vlm-test/vlm-test.html'), '_blank');
 });
 
 elements.btnStartRecording.addEventListener('click', () => {
