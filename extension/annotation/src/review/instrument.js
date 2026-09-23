@@ -1,19 +1,21 @@
 // Fixed review draft: research/reports/2026-09-09-progress-plan.md, slides 20 and 22.
 // This is not an approved instrument; earlier answer snapshots keep their original version.
 //
-// 2026-09-22: scale changed from 7 points to 5 by user decision, so this is a new
-// version. Item wording and endpoints are unchanged. Answers recorded under
-// draft-20260909.2 were collected on a 7-point scale and are NOT comparable
-// point-for-point; they keep their own version tag and are never rescaled.
-// scale_points is now the single source for the rendered scale and for answer
-// validation, so it cannot drift from the interface again.
-export const UI_VERSION = 'review-ui-20260922.1';
+// 2026-09-22: the scale was briefly changed to 5 points (draft-20260922.1) and
+// reverted to 7 on 2026-09-23. Both source scales are 7-point — Mishra et al.
+// (1993) is a 7-point semantic differential and the MSLQ is a 7-point Likert —
+// so 7 keeps the adaptation to wording and framing only. No answers were
+// recorded at 5 points, so this returns to the same instrument rather than
+// becoming a third version, and its hash returns to the original value.
+// scale_points is the single source for the rendered scale and for answer
+// validation, so the declared and displayed scales cannot drift apart.
+export const UI_VERSION = 'review-ui-20260923.1';
 export const INSTRUMENT = {
   id: 'attention-encounter-review',
-  version: 'draft-20260922.1',
+  version: 'draft-20260909.2',
   status: 'review_draft',
   eligible_for_primary_analysis: false,
-  scale_points: 5,
+  scale_points: 7,
   x_prompt: '請回想在閱讀這則貼文之前，你對這個主題的了解程度。',
   y_prompt: '請根據剛才實際瀏覽這則貼文時的情況回答，不要根據現在重看後才想到的內容回答。',
   items: [
