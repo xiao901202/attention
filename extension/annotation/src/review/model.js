@@ -1,9 +1,39 @@
 import { INSTRUMENT, UI_VERSION } from './instrument';
 
-export function candidateIndices(segments) {
-  return segments.flatMap((s, i) => s.state === 'READING_FLOW'
+// Seeded so a resumed session asks in the same order it started in. Reshuffling
+// on reload would change what the person is answering half way through.
+function orderSeed(recordingId) {
+  let hash = 2166136261;
+  for (const char of String(recordingId ?? '')) {
+    hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+  }
+  return hash || 1;
+}
+
+// Fisher-Yates over a seeded xorshift, so the order is random but reproducible
+// from the recording id alone.
+function shuffled(items, seed) {
+  let state = seed;
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    state ^= state << 13; state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5; state >>>= 0;
+    const j = state % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+// The advisor requires that candidates are not presented in feed order
+// (2026-06-25, recorded as D85): answering in the order Facebook served the
+// posts lets fatigue late in a session correlate with a post's position in the
+// feed, which would look like an effect of the content.
+export function candidateIndices(segments, recordingId) {
+  const found = segments.flatMap((s, i) => s.state === 'READING_FLOW'
     && Number.isFinite(s.startTime) && Number.isFinite(s.endTime)
     && s.startTime >= 0 && s.endTime - s.startTime >= 2000 ? [i] : []);
+  return shuffled(found, orderSeed(recordingId));
 }
 
 export function emptyDraft() {
@@ -29,8 +59,9 @@ export function createReview(source, instrument) {
     postTracking: source.postTracking || null,
     cropRect: source.cropRect || null,
     duration: source.duration,
-    sampling: { method: 'legacy_reading_candidate', minimum_segment_ms: 2000, includes_non_candidates: false },
-    candidates: candidateIndices(source.segments),
+    sampling: { method: 'legacy_reading_candidate', minimum_segment_ms: 2000, includes_non_candidates: false,
+      presentation_order: 'seeded_shuffle_v1', order_seed_source: 'recording_id' },
+    candidates: candidateIndices(source.segments, source.recordingId),
     cursor: { stage: 'intro', segment: 0, item: 0 },
     drafts: {},
     annotations: {},

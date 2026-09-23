@@ -35,7 +35,26 @@
       && (text.startsWith(hint.text) || hint.text.startsWith(text));
   }
   let lastMove = 0, lastSample = -Infinity, pending = false, timer = null, identitySalt = null;
-  const send = m => { try { chrome.runtime.sendMessage({ ...m, recording_id: recordingId, document_id: documentId }).catch(() => {}); } catch {} };
+  // Reloading an unpacked extension orphans the content scripts already running
+  // in open tabs: they keep executing but every message throws
+  // "Extension context invalidated". Swallowing that silently made a whole
+  // recording come back empty with nothing to see, so mark it in the DOM and
+  // stop the heartbeat instead of pretending to collect.
+  let orphaned = false;
+  function markOrphaned() {
+    if (orphaned) return;
+    orphaned = true; recordingId = null;
+    clearInterval(timer); timer = null;
+    document.documentElement.setAttribute('data-attention-post-detector', 'orphaned');
+  }
+  const alive = () => { try { return !!chrome.runtime?.id; } catch { return false; } };
+  const send = m => {
+    if (!alive()) { markOrphaned(); return; }
+    try {
+      chrome.runtime.sendMessage({ ...m, recording_id: recordingId, document_id: documentId })
+        .catch(() => { if (!alive()) markOrphaned(); });
+    } catch { markOrphaned(); }
+  };
   function permalink(root) {
     const owner = root.matches('[role="article"]') ? root : root.querySelector('[role="article"]');
     for (const a of root.querySelectorAll('a[href]')) {
@@ -158,7 +177,7 @@
       if (typeof c?.identity_salt === 'string' && c.identity_salt) identitySalt = c.identity_salt;
       clearInterval(timer); timer = recordingId ? setInterval(sample, 250) : null;
       if (recordingId) sample();
-    } catch { recordingId = null; clearInterval(timer); }
+    } catch { markOrphaned(); }
   }
   chrome.runtime.onMessage.addListener(m => {
     if (['RECORDING_STARTED', 'RECORDING_RESUMED', 'TAB_ACTIVATED'].includes(m.type)) sync();

@@ -169,7 +169,7 @@ async function failWrites(page, enabled) {
     await page.getByRole('button', { name: '下載目前草稿' }).click();
     await (await downloadEvent).saveAs(path.join(out, 'unsaved-submission.json'));
     const pending = JSON.parse(fs.readFileSync(path.join(out, 'unsaved-submission.json')));
-    assert.equal(pending.annotations[0].outcome, 'answered');
+    assert.equal(pending.annotations[pending.candidates[0]].outcome, 'answered');
     assert.equal(pending.local_save_state, 'error');
     await page.evaluate(() => { window.failReviewWrites = false; });
     await page.getByRole('button', { name: '重試儲存' }).click(); await saved(page);
@@ -182,6 +182,22 @@ async function failWrites(page, enabled) {
     await page.reload(); await page.locator('.workspace-top').waitFor();
     assert.match(await page.locator('.workspace-top h2').innerText(), /第 2 段/);
     await screenshot(page, '11-direct-next-segment');
+  });
+  await check('Candidates are not presented in feed order, and the order survives a reload', async () => {
+    const s = (await dbRead(page))[0];
+    assert.equal(s.sampling.presentation_order, 'seeded_shuffle_v1');
+    const feedOrder = [...s.candidates].sort((a, b) => a - b);
+    // With three or more candidates a feed-order presentation would be a real
+    // finding, not a coincidence; the advisor requires the order be shuffled.
+    if (s.candidates.length >= 3) {
+      assert.notDeepEqual(s.candidates, feedOrder, 'candidates must not be in feed order');
+    }
+    assert.deepEqual([...s.candidates].sort((a, b) => a - b), feedOrder, 'shuffling must not add or drop candidates');
+    const before = s.candidates.slice();
+    await page.reload();
+    await page.locator('.review-app').waitFor();
+    await saved(page);
+    assert.deepEqual((await dbRead(page))[0].candidates, before, 'a reload must not reshuffle');
   });
   await check('All eight fixed items and X endpoints match the discussion PPT draft', async () => {
     const s = (await dbRead(page))[0];
@@ -204,10 +220,10 @@ async function failWrites(page, enabled) {
     const s = (await dbRead(page))[0];
     assert.equal(s.schema_version, 2); assert.equal(s.collection_mode, 'interface_demo');
     assert.equal(s.eligible_for_primary_analysis, false); assert.equal(s.instrument.sha256.length, 64);
-    assert.equal(Object.keys(s.annotations[0].item_answers).length, 8);
-    assert.equal(s.annotations[0].item_answers.X10.value, null);
-    assert.equal(s.annotations[0].item_answers.X10.missing_reason, 'cannot_recall');
-    assert(!('label' in s.annotations[0]));
+    assert.equal(Object.keys(s.annotations[s.candidates[0]].item_answers).length, 8);
+    assert.equal(s.annotations[s.candidates[0]].item_answers.X10.value, null);
+    assert.equal(s.annotations[s.candidates[0]].item_answers.X10.missing_reason, 'cannot_recall');
+    assert(!('label' in s.annotations[s.candidates[0]]));
   });
   await page.getByRole('radio', { name: '片段有誤／不是這則內容' }).check();
   await check('Repeated skip clicks produce one record and advance exactly one segment', async () => {
@@ -215,7 +231,10 @@ async function failWrites(page, enabled) {
     await page.getByRole('button', { name: /記錄並略過/ }).evaluate(button => { button.click(); button.click(); });
     await saved(page);
     const s = (await dbRead(page))[0];
-    assert.equal(Object.keys(s.annotations).length, 2); assert.deepEqual(s.annotations[1].item_answers, {});
+    assert.equal(Object.keys(s.annotations).length, 2);
+    const skipped = s.annotations[s.candidates[1]];
+    assert.deepEqual(skipped.item_answers, {}, 'a skipped segment stores no answers');
+    assert.equal(skipped.outcome, 'skipped');
     assert.equal(s.cursor.segment, 2); assert.equal(s.cursor.stage, 'gate');
     assert.match(await page.locator('.workspace-top h2').innerText(), /第 3 段/);
   });
@@ -261,7 +280,7 @@ async function failWrites(page, enabled) {
     const data = JSON.parse(fs.readFileSync(filePath));
     assert.equal(Object.keys(data.annotations).length, 3);
     assert.equal(data.legacy_quadrant_scoring_applied, false);
-    assert.equal(data.annotations[2].reason, 'cannot_recall');
+    assert.equal(data.annotations[data.candidates[2]].reason, 'cannot_recall');
     // The reviewer's own copy keeps the permalink; the export must not.
     assert.equal(data.permalinks_redacted, true);
     const exported = Object.values(data.postTracking.posts)[0];

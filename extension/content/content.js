@@ -27,12 +27,16 @@
         if (err.message?.includes('Extension context invalidated')) {
           contextValid = false;
           console.log('[BehaviorEngine] Extension context invalidated, stopping...');
+          // Visible in the DOM too: a console line in one of many tabs is not
+          // something a participant or a researcher checking a session will see.
+          try { document.documentElement.setAttribute('data-attention-engine', 'orphaned'); } catch {}
           cleanup();
         }
       });
     } catch (err) {
       if (err.message?.includes('Extension context invalidated')) {
         contextValid = false;
+        try { document.documentElement.setAttribute('data-attention-engine', 'orphaned'); } catch {}
         cleanup();
       }
       return Promise.resolve();
